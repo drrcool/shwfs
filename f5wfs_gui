@@ -10,7 +10,8 @@
 # apower = apogee
 # fpower = StellaCam
 
-require 'libglade2'
+### require 'libglade2'
+require 'gtk2'
 require 'thread'
 require 'timeout'
 require 'socket'
@@ -21,7 +22,8 @@ when 'Maestro'
 else
   require '/mmt/shwfs/wfscat.rb'
 end
-require '/mmt/admin/srv/tcs_lookup.rb'
+###require '/mmt/admin/srv/tcs_lookup.rb'
+require '/mmt/shwfs/tcs_lookup.rb'
 
 # set some global stuff shared by all classes
 $wavehost, $waveport = srv_lookup('waveserv')
@@ -554,14 +556,17 @@ class MainWindow
 
   def initialize(inst)
     @inst = inst
-    @glade = GladeXML.new("#{$path}/glade/f5wfs_gui.glade") {|handler| method(handler)}
+    ### @glade = GladeXML.new("#{$path}/glade/f5wfs_gui.glade") {|handler| method(handler)}
 
-    @glade.get_widget("hbox4").hide
-    @glade.get_widget("SciTemp").hide
+    ### @glade.get_widget("hbox4").hide
+    ### @glade.get_widget("SciTemp").hide
 
-    @mainwindow = @glade.get_widget("MainWindow")
+    ###@mainwindow = @glade.get_widget("MainWindow")
+    @mainwindow = Gtk::Window.new
+
     @mainwindow.set_title("F/5 WFS Interface for #{@inst}")
 
+=begin
     @status = @glade.get_widget("StatusBar")
     @menubar = @glade.get_widget("menubar1")
 
@@ -644,6 +649,7 @@ class MainWindow
 #    end
 
     temp_mon
+=end
 
   end
 
