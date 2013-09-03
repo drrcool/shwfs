@@ -1,0 +1,109 @@
+all of the wavefront sensor software resides in /mmt/shwfs which is
+mirrored between hacksaw, hoseclamp, alewife, homer, and mmto.org.
+during the night, acquired data gets saved in /mmt/shwfs/datadir.  at
+the end of the night, the script /mmt/admin/wfsdat_rotate.sh gets run
+from cron on hacksaw and archives data from hacksaw:/mmt/shwfs/datadir
+and hoseclamp:/mmt/shwfs/datadir into /mmt/wfsdat/`date +%Y%m%d`.
+
+thus, the WFS software is meant to be run from either hacksaw or
+hoseclamp (not alewife or homer) by a member of the mmtop group.  see
+http://www.mmto.org/WFS/ for details on running the WFS software and
+analyzing WFS data. 
+
+the main scripts are shwfs.tcl for the f/9 version and shwfs_f5.tcl
+for the f/5 version.  these are executed from the .desktop files in
+/mmt/admin/desktop when operators bring up the software from the
+desktop menu.  there is an environment variable called WFSROOT that,
+if not already defined, gets set to /home/mmt/shwfs (equiv to
+/mmt/shwfs) within those shwfs*.tcl scripts.  i use that to be able to
+run versions of code in places other than the default location
+(e.g. on caliente or at home).  the tcl scripts connect to telserver
+to query and command the hexapod via MSG. 
+
+image display is done via ds9 and the xpaset/xpaget commands.  the
+shwfs*.tcl scripts test for a running ds9 window via xpaget and bring
+up a ds9 window if none is around.  sometimes there might be a ds9
+window running somewhere else that's hidden that can confuse this.  if
+a ds9 window does not appear when starting the shwfs software, look
+around for rogue ds9 processes and kill them.  a ds9 window brought up
+from Main Menu->Graphics->More Graphics Applications->DS9 will work
+fine with the wfs.  at some point i will rearrange how i handle ds9 so
+that the wfs will bring one up with a specific xpa name other than
+'ds9'.  this'll help reduce the possibility of confusion, though in
+practice it hasn't been much of an issue.  
+
+the f/5 version of the wfs code will load
+$env(WFSROOT)/observemenu.tcl into ds9 for the fixpointing menu.  it
+is to be used with the pixelink camera to put the wfs star onto the
+center of rotation by moving the hexapod in ZC mode.  it goes through
+telserver to talk to the hexapod and uses the tiltxerr_zc and
+tiltyerr_zc commands.  as of 20040610, i put a catch around the
+msg_cmd's that do these moves to help work around the occasional
+timeouts that ale reported.
+
+the f/9 wfs uses $env(WFSROOT)/f9wfs_gui for the image acquisition.
+it is a really simple ruby/glade script and how it works should be
+obvious from looking at it.  it sudo's to mmtop and rsh's to wavefront
+to run my get_apogee_image.tcl script which writes the FITS image back
+over NFS.  i backed up my home dir on wavefront onto caliente at
+/home/tim/MMT/wavefront_home_20040610.tgz.  the apogee driver software
+is installed under /opt/apogee on wavefront and i keep a mirror at
+caliente:/opt/apogee as well as under /mmt/apogee.  usually if there's
+a problem with this stuff, it's due to a cabling issue with the apogee
+camera or wavefront is turned off.  
+
+the f/5 wfs uses $env(WFSROOT)/f5wfs_gui for image acquisition and wfs
+stage/camera control.  it is also ruby/glade and is rather more
+complicated than the f/9 setup.  the web pages go into detail on each
+of the windows and how to use them.  it talks msg to several servers
+on the f/5 wavefront computer, f5wave.mmto.arizona.edu
+(192.168.1.150), as well as a couple of servers on packrat
+(192.168.1.2).  the servers on f5wave control the cameras and all of
+the wfs servos.  the ones on packrat are used only to control a couple
+of the pulizzi power supplies on the 2nd floor.  the WFSCat object
+also talks directly to the mount for setting offsets and moving to
+objects and stuff.  a lot of the actual communication is done via the
+$env(WFSROOT)/f5wfs script provided by john roll.  it has a few
+annoying quirks that i still need to track down.  i plan on porting
+all of its functionality to ruby at some point.  a lot of the quirks
+and problems with the f/5 setup happen if the startup/shutdown
+procedures are not followed closely.  order and timing is important.
+the web pages provide details.  
+
+$env(WFSROOT)/wavedisplay is a port of john roll's engineering
+interface to the f/5 wfs systems.  i now bring it up by default as one
+of the wfs windows since it provides useful debugging information and
+more fine-grained control of many of the systems (such as the ability
+to tune pmac servo parameters).  
+
+FITS image headers are munged by f9_header.pl and f5_header.pl
+scripts.  the f/9 version talks to telserver and the hexapod via MSG.
+that should get changed to use the 'all' command both places.  the f/5
+version only talks to telserver currently for everything.  they used
+to talk to dataserver, but that proved unreliable so it's commented
+out.  header handling needs to be cleaned up and organized a lot
+better.....  the rotator angle is the only header parameter that's
+really necessary since it's used in the wfs analysis to determine
+pupil rotation. 
+
+the spot finding and centroiding are done via the daophot.pl and
+daophot_f5.pl scripts.  they interface to IRAF routines via the
+daophot script, display images and spot data in the ds9 window, and
+use the spot widths to calculate the seeing.  after the centroid data
+is massaged, shcenfind/shcenfind_f5 use the centroids to calculate the
+grid magnification (focus, basically) and grid center.  if shcenfind
+doesn't find what it needs, overlay.tcl/overlay_f5.tcl will pop up a
+window that lets the operator manually determine magnification and
+center.  
+
+once the centroids, center, and mag are determined,
+getZernikesAndPhases/getZernikesAndPhases_f5 do the zernike polynomial
+fit and display the results in the wim window.  bcv/bcv_f5 calculate
+mirror forces from the zernike fit.  corrections for focus
+and coma are sent to the secondary via msg to telserver and the
+primary is corrected via execing rcell.  
+
+the C code generates f/9 or f/5 versions of the executable based on
+whether -DF9 or -DF5 is set on the compiler command line.  the
+Makefile sets all of this up.  optics.h contains the appropriate
+optical information for each system.  

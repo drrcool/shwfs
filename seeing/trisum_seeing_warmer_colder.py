@@ -1,0 +1,145 @@
+#!/usr/bin/env python
+#===============================================================================
+#
+# Python Numpy/Scipy program for analyzing MMTO WFS seeing data.
+#
+#===============================================================================
+
+import numpy as np
+import matplotlib.cm as cm
+import matplotlib.pyplot as plt
+import scipy.stats as stats
+import MySQLdb
+import math
+
+params = {'axes.labelsize': 20,
+          'axes.fontsize' : 20,
+          'axes.set_aspect': 20,
+          'text.fontsize': 18,
+          'legend.fontsize': 20,
+          'xtick.labelsize': 20,
+          'ytick.labelsize': 20,
+          'figure.facecolor': 'white'}
+
+plt.rcParams.update(params)
+
+plt.rcParams['figure.figsize'] = 12, 8
+
+# Date for beginning for WFS Data
+t1 = "2012-05-01"
+
+# Date for beginng of wind data from any sensor.
+# t1 = "2005-04-15"
+
+# Date for starting of temptrax1 background log.
+# t1 = "2006-04-18"
+
+# End of study, remains the same...
+t2 = "2012-09-01"
+
+tempdiff_pos = []
+tempdiff_neg = []
+
+max_x = 2.5
+min_x = 0.01
+
+# Get the MySQL data.
+#
+# Reference:
+# http://mysql-python.sourceforge.net/MySQLdb.html
+db=MySQLdb.connect(user="mmtstaff",passwd="multiple",db="mmtlogs")
+
+# Read in data
+c=db.cursor()
+
+# Execute the SQL command to get the seeing data.
+# c.execute("""SELECT `timestamp`, `see_zenith_as` FROM `wfs_seeing_log` WHERE timestamp > %s AND timestamp < %s AND (`mode` = "F5" OR `mode` = "F9") ORDER BY `wfs_seeing_log`.`timestamp` ASC""", (t1, t2))
+c.execute("""SELECT `timestamp`, `see_zenith_as`, `mode`, MONTH(`timestamp`) FROM `wfs_seeing_log` WHERE timestamp > %s AND timestamp < %s ORDER BY `wfs_seeing_log`.`timestamp` ASC""", (t1, t2))
+
+# Fetch all the rows in a list of lists.
+results = c.fetchall()
+
+# A counter of the number of rows returned from the MySQL database.
+count = 0
+
+for row in results:
+    count += 1
+    timestamp = row[0]
+    see_zenith_as = row[1]
+    wfs_mode = row[2]
+    month = row[3]
+    
+    print "row=%s" % (count,)
+
+    c.execute("""SELECT timestamp, (cell_frontplate_C - cell_chamber_ambient_C), (cell_chamber_ambient_C - cell_outside_ambient_C) from cell_e_series_background_log WHERE timestamp > %s AND timestamp <= ADDTIME(%s, '00:05:00') ORDER BY `timestamp` ASC LIMIT 1""", (timestamp,timestamp))
+    
+    results2 = c.fetchall()
+     
+    for row2 in results2:
+        # Temperature difference depends on the mode being used.
+        # 
+        val_param1 = row2[1]  # cell_frontplate_C - cell_chamber_ambient_C
+        val_param2 = row2[2]  # cell_chamber_ambient_C - cell_outside_ambient_C
+        
+        # print "val_param1=%s" % (val_param1,)
+        
+        try:
+            # Checking that numbers are floats.
+            if float(val_param1):                
+                if float(see_zenith_as):
+                    if see_zenith_as >= min_x:
+                        if  see_zenith_as <= max_x:
+                            print "Adding count=%s timestamp=%s,see_zenith_as=%s" % (count, timestamp, see_zenith_as  )
+                            if val_param1 >= 0.0:
+                                tempdiff_pos.append(see_zenith_as)
+                            else:
+                                tempdiff_neg.append(see_zenith_as)
+                                
+        except:
+            print "Error: Bad data"
+            
+            
+title_str = """MMTO Seeing Data: %s to %s""" % (t1, t2)
+xlabel_str = 'Seeing (Arcsec, Corrected to Zenith)'
+ylabel_str = 'Frequency'
+bins_x = 50
+
+# disconnect from server
+db.close()
+
+np1 = np.array(tempdiff_neg)
+np2 = np.array(tempdiff_pos)
+
+txt =  "Mirror colder than air:\n"
+txt += "  Samples = %s\n" % (len(tempdiff_neg))
+txt += "  Median =  %.2f arcsec\n" % (np.ma.extras.median(np1))
+txt += "  Mean =  %.2f arcsec\n" % (np.ma.average(np1))
+txt += "-------------------\n"
+
+txt +=  "Mirror warmer than air:\n"
+txt += "  Samples = %s\n" % (len(tempdiff_pos))
+txt += "  Median =  %.2f arcsec\n" % (np.ma.extras.median(np2))
+txt += "  Mean =  %.2f arcsec" % (np.ma.average(np2))
+
+plt.hist( [np1, np2  ], bins_x,  label=['Mirror colder than air', 'Mirror warmer than air'], color = ('b', 'r'))
+
+plt.legend()
+
+plt.title(title_str, fontsize=24)
+plt.xlabel(xlabel_str, fontsize=20)
+plt.ylabel(ylabel_str, fontsize=20)
+
+plt.text(1.5, 80, txt,
+        horizontalalignment='left',
+        verticalalignment='top')
+
+plt.grid(True)
+
+plt.axis('tight')
+
+show =True
+if show:
+    plt.show()
+else: 
+    plt.savefig("trisum_seeing_warer_colder.png", bbox_inches='tight');
+

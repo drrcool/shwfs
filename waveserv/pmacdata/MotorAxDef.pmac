@@ -1,0 +1,33 @@
+/* Motor --> Axis Definitions
+ */
+
+@01
+
+#define XAxis		X
+#define MAxis		Y
+#define FAxis		Z
+#define CAxis		U
+
+#define XOffset		0
+#define YOffset		0
+#define ZOffset		0
+#define TOffset		0
+#define POffset		0
+#define GOffset		0
+
+#define XMotor		1
+#define YMotor		2
+#define ZMotor		3
+#define TMotor		4
+
+#define XScale		2000
+#define MScale		2000
+#define FScale		2000
+#define CRScale		2000
+
+&1
+
+:#:XMotor->+XScale:XAxis+XOffset
+:#:MMotor->+MScale:MAxis+MOffset
+:#:FMotor->+FScale:FAxis+FOffset
+:#:CMotor->+CScale:CAxis+COffset

@@ -1,0 +1,53 @@
+#!/usr/bin/tclsh
+
+if { $argv == "help" || $argv == ""} {
+   puts stdout "
+
+	Apogee client commands
+	----------------------
+
+	
+	status       - returns temp,cooler,fan,shutter,camera-status
+	fan 	 off
+	fan	 slow
+	fan	 medium
+	fan	 fast
+	datadir \[path-to-data-directory\]
+	setinfo	 ra         \[value\]
+	setinfo	 dec        \[value\]
+	setinfo	 equinox    \[value\]
+	setinfo	 latitude   \[value\]
+	setinfo	 longitude  \[value\]
+	setinfo	 name       \[value\]
+	setinfo	 observer   \[value\]
+	setinfo	 telescope  \[value\]
+	setinfo	 instrument \[value\]
+	setinfo	 target     \[value\]
+	setinfo	 filtername \[value\]
+	setinfo	 site       \[value\]
+	abort
+	setpoint set \[temperature\]
+	setpoint on
+	setpoint off
+	setpoint amb
+	getpoint      - returns current setpoint temperature
+	snapshot \[name\] \[exposure\] \[shutter\]  
+                      - exposure in sec, shutter 1=open 0=closed
+	snapsleep \[name\] \[exposure\] \[shutter\] 
+                      - will not return until image read out
+	shutdown      - shuts down the server process
+
+"
+  exit 
+}
+
+
+set s [socket wavefront 2001]
+fconfigure $s -buffering line
+puts $s "$argv"
+gets $s rec
+puts stdout "Result : $rec"
+close $s 
+exit
+
+

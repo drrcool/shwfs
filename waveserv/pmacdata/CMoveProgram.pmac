@@ -1,0 +1,26 @@
+
+open program CMoveProgram
+ ProgramInit(C)
+ ChekDesired(C)
+
+ if ( THomed = 0 )
+	PrgError(ErrTNotHomed)
+ endif
+
+ CAxisPos = AxisPos(C)
+ TAxisPos = AxisPos(T)
+
+ if ( CDesired < CAxisPos ) 
+    if ( TAxisPos < -275.0 )
+	PrgError(ErrTNotCentered)
+    endif
+ endif
+
+ ReleaseBrak(C)
+
+ Move(C, CDesired) 
+ WaitForInPosition(C)
+
+ RestoreBrak(C)
+ ProgramDone(C)
+close

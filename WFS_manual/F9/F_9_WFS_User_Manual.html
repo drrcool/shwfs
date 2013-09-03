@@ -1,0 +1,391 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+  <meta http-equiv="content-type"
+ content="text/html; charset=ISO-8859-1">
+  <title>F/9 WFS User Manual</title>
+</head>
+<body>
+<h1 style="text-align: center;">F/9 WFS User Manual<br>
+</h1>
+<h4>Powering Up After Shutdown or Topbox Installation</h4>
+<ul style="margin-left: 40px;">
+  <li>For now the wavefront computer (wavefront.mmto.arizona.edu ==
+128.196.100.29) is to be installed in the nook on the east side of the
+f/9 topbox.&nbsp; Eventually it will live permanently on the east drive
+arc.&nbsp; When installing it, make sure the bottom of the computer
+faces east otherwise the Apogee cable won't fit.&nbsp; The only cables
+that need to be attached to wavefront are power, ethernet, and
+Apogee.&nbsp; <span style="font-weight: bold;">Imporant: </span>When
+installing wavefront, plug the Apogee cable into the computer first
+before plugging it into the camera. This way the computer will absorb
+any static electricity that the cable may have picked up.&nbsp; <br>
+  </li>
+  <li>When wavefront is installed, the power switch is located on the
+panel facing up and is thus out of sight.&nbsp; It is close to the side
+facing north so feel along for a ridge on the panel and the power
+button
+will be along that ridge about 1 cm in from the north edge.&nbsp; <br>
+  </li>
+  <li>After powering on, check to make sure the case fan is working and
+the LEDs on the ethernet plug are blinking.&nbsp; Double-check by
+pinging the machine from another machine, if desired. <br>
+  </li>
+</ul>
+<div style="margin-left: 40px;"> </div>
+<h4><br>
+</h4>
+<h4>Bringing Up and Using the WFS User Interface</h4>
+<div style="margin-left: 40px;">Hacksaw and Hoseclamp both have entries
+for the WFS GUI in the main
+system menus.&nbsp; Go to the Extras-&gt;Other menu, select 'F/9
+Wavefront Sensor', and the following windows will appear:<br>
+</div>
+<br>
+<span style="font-weight: bold;"></span><span style="font-weight: bold;"></span>
+<div style="text-align: center;"><span style="font-weight: bold;">Apogee
+CCD Interface Window</span><br>
+</div>
+<div style="text-align: center;"><img src="ccd.jpg" title="" alt=""
+ style="width: 408px; height: 130px;"><br>
+<div style="text-align: left; margin-left: 40px;">
+<div style="text-align: left;">This window is a simple interface that
+talks over the network to wavefront to acquire WFS frames from the
+Apogee CCD camera.&nbsp; It will automatically place images in the
+default WFS data directory <span style="font-family: monospace;">/mmt/shwfs/datadir</span>.&nbsp;
+A script runs every morning to clean up and archive any data in that
+directory on both hacksaw and hoseclamp.<br>
+</div>
+<br>
+</div>
+<span style="font-weight: bold;"><br>
+DS9 Image Display<br>
+<img src="ds9.jpg" title="" alt="" style="width: 450px; height: 666px;"><br>
+</span>
+<div style="text-align: left; margin-left: 40px;">Both the CCD
+interface and WFS
+analysis routines use a DS9 window to display the most recently
+acquired
+or analyzed image.&nbsp; The analysis routines will also display the
+measured spot centroids as small red circles as well as a measure of
+the
+seeing determined from the widths of the spots.&nbsp; <br>
+<br>
+<span style="font-weight: bold;"></span></div>
+<span style="font-weight: bold;"><br>
+WFS File Selection and Analysis Dialog<br>
+<img src="shwfs.jpg" title="" alt=""
+ style="width: 392px; height: 426px;"><br>
+</span>
+<div style="text-align: left; margin-left: 40px;"><span
+ style="font-weight: bold;"></span>This is the main interface for
+selecting files to analyze and operating on them.&nbsp; Primarily it
+will be used to select .fits images to centroid and analyze.&nbsp;
+Multiple consecutive images can be selected by clicking on the first
+and
+then holding down the Shift key while clicking on the last.&nbsp;
+Multiple non-consecutive images can be selected by holding down the
+Ctrl
+key file clicking on the desired files.&nbsp; Various diagnostic
+messages are reported to the scrollbox at the bottom.&nbsp; <br>
+<br>
+<br>
+<div style="text-align: center;"><span style="font-weight: bold;">Overlay
+Window</span><br>
+</div>
+<div style="text-align: center;"><img src="overlay.jpg" title="" alt=""
+ style="width: 526px; height: 616px;"><br>
+<div style="text-align: left; margin-left: 40px;">If the automatic
+centroiding and initial spot association routine fails for some reason,
+this window will pop up to allow the user to align the reference spot
+positions (red boxes) with the measured spots in the image.&nbsp;
+Clicking and dragging anywhere in the image will move the entire
+reference pattern around at once.&nbsp; The 'Mag+' and 'Mag-' buttons
+will scale the reference pattern to account for any focus offset.&nbsp;
+The centroiding parameters HWHM and Threshold can be changed and then
+applied to the image by clicking 'Re-centroid'.&nbsp; Clicking 'Accept'
+will take the reference pattern position and the improved centroiding
+and use them to continue analysis of the image.&nbsp; Clicking
+'Discard'
+will cause the image to be ignored from any further processing. <br>
+<br>
+</div>
+</div>
+<span style="font-weight: bold;"></span></div>
+<span style="font-weight: bold;"><br>
+Zernike Display and Wavefront Correction Window<br>
+<img src="zernike.jpg" title="" alt=""
+ style="width: 291px; height: 600px;"><br>
+</span>
+<div style="text-align: left; margin-left: 40px;"><span
+ style="font-weight: bold;"></span>This window displays the results of
+a wavefront analysis in terms of the amplitudes of the first 19 Zernike
+components.&nbsp; The first 3 components plus any other component with
+an amplitude of less than 100 nm is deselected by default.&nbsp; After
+modifying the selection of modes, the 'Pupil Modes' button will
+generate
+new wavefront error and diffraction PSF images while the 'Axial Forces'
+button will generate a new primary mirror force-set. <br>
+<br>
+The 'Set Reference Focus' button is largely for engineering purposes to
+calibrate the focus offset between an instrument and the WFS
+system.&nbsp; It will eventually be replaced by a pull-down menu for
+selecting which instrument is mounted.&nbsp; The 'Correct Secondary'
+button will correct the focus and coma terms by moving the secondary
+mirror accordingly.&nbsp; The 'Correct Primary' button will calculate
+the axial forces required to correct the selected Zernike modes and
+then
+apply them to the primary via the <span style="font-family: monospace;">rcell</span>
+command. <br>
+<span style="font-weight: bold;"></span></div>
+<span style="font-weight: bold;"><br>
+Wavefront Error, PSF, and Mirror Force Display<br>
+<img src="wim.jpg" title="" alt="" style="width: 500px; height: 543px;"><br>
+</span>
+<div style="text-align: left; margin-left: 40px;"><span
+ style="font-weight: bold;"></span>The pupil image in the upper left
+represents the deviation of the optics from an ideal figure while the
+PSF image in the upper right displays the diffraction image that would
+result from it.&nbsp; Both images are generated using the selected
+Zernike modes in the Zernike display window and are regenerated by the
+Pupil Modes button there.&nbsp; The bar graph in the lower left
+displays
+the RMS wavefront errors generated by each Zernike mode regardless of
+whether they are selected or not.&nbsp; The scrollbox in the lower
+right
+displays the calculated axial force for each primary mirror actuator in
+Newtons. <br>
+<span style="font-weight: bold;"></span></div>
+<br>
+<div style="text-align: left;">
+<h4>Acquiring and Analyzing WFS Data<br>
+</h4>
+</div>
+<ol style="text-align: left;">
+  <ol>
+  </ol>
+  <ul style="list-style-type: disc;">
+    <li>Put the comparison mirror in and select a star from one of the
+WFS catalogs available in the scope window.&nbsp; The catalogs are
+broken down into ranges of magnitude from about 8.0 to 9.75 and are
+predominantly red stars of type F or later.&nbsp; The center for the
+f/9
+WFS system seems to be offset from the center of rotation by about 10"
+in elevation and 2-3" in azimuth.&nbsp; Setting the filename to "<span
+ style="font-family: monospace;">test</span>" in the CCD interface
+window will cause the file test.fits to be continuously
+overwritten.&nbsp; It is recommended to use that filename when taking
+initial test exposures to make sure the spot image is centered.&nbsp;
+After an image is acquired it is automatically displayed in the DS9
+window. <br>
+    </li>
+    <li>Under clear conditions and decent seeing 5 sec exposures are
+sufficient for mag 8 stars, 10 sec for mag 9, and 20-25 sec for mag
+9.75
+or fainter.&nbsp; Bad seeing will smear the spots out and may require
+longer integrations.&nbsp; Try to take at least 3 exposures and shoot
+for about 25-30 sec or more total exposure time to help average out
+seeing effects.&nbsp; Use the DS9 window to inspect how many counts are
+in the peaks of the spots.&nbsp; Greater than 12000 counts runs the
+risk
+of saturation while less than 2000 frequently reduces the effectiveness
+of the automatic analysis routines.&nbsp;&nbsp; Somewhere in the range
+of 5000 to 9000 counts is a good place to shoot for, but how long it
+takes to get there depends a lot on the seeing.&nbsp; If the seeing is
+bad, it may not be worth waiting that long.&nbsp; Single short
+exposures are recommended for initial setup since the focus and coma
+aberrations are likely to be large. <br>
+    </li>
+    <li>Once the images are acquired, clicking the 'Apply' button in
+the WFS File Selection window will update its file listing with the
+most
+recent files being appended to the top of the listing.&nbsp; Select
+those images using either Shift+click or Ctrl+click to highlight them
+and then click 'Centroid' to run the analysis on them.</li>
+    <li>As each image is analyzed, it will be displayed in the DS9
+window along with the measured spot centroids.&nbsp; Check to make sure
+as many spots are centroided as possible with few, if any, spuriously
+detected spots.&nbsp; If the measured centroids do not match the
+criteria of the automatic routines, the overlay window will pop
+up.&nbsp; Use that to align the reference pattern with the spots in the
+image and adjust the centroiding parameters until as many correct spots
+are measured as possible.&nbsp; Bad seeing will likely require the
+threshold to be decreased and the HWHM to be increased.&nbsp; Spurious
+spots along the edge of an image or around the left/right edges of the
+pupil can be gotten rid of by increasing the HWHM, the threshold, or
+both.&nbsp; Having a few spurious spots in an image is generally not a
+problem since the detailed spot association routine will reject them
+most of the time.&nbsp; Averaging multiple frames will also help reject
+any spurious spots in any single frame. <br>
+    </li>
+    <li>Once the images are centroided and the centroid positions
+averaged together, the results of the wavefront analysis will appear in
+the Zernike and Wavefront Error windows.&nbsp; By default, Zernike
+modes
+1 through 3 plus 19 are turned off plus any other mode with an
+amplitude
+of less than 100 nm.&nbsp; More sophisticated decision trees need to be
+implemented in the interface to simplify this part of the
+process.&nbsp;
+In the meantime, some notes and tips to be aware of include:<br>
+    </li>
+  </ul>
+  <ol>
+  </ol>
+  <ol>
+    <ul style="list-style-type: circle;">
+      <li>The first three modes are ignored by the code that computes
+axial forces and there's no real reason to ever turn them on.&nbsp; <br>
+      </li>
+      <li>The values of modes 3, 6, and 7 (defocus, Xcoma, and Ycoma)
+will be used when Correct Secondary is clicked regardless of whether
+they're selected or not.</li>
+      <li>To reduce the amount of force required to correct spherical
+aberration (mode 8), some amount of defocus is also added to the
+primary.&nbsp; This is then compensated for using the secondary and
+reported.&nbsp; However, if corrections for spherical are applied and
+then the mirror forces cleared via <span
+ style="font-family: monospace;">rcell
+-c</span>, the telescope focus will have to be readjusted
+accordingly.&nbsp; <br>
+      </li>
+      <li>High order terms, especially high-order spherical (mode 19),
+are generally a function of mirror isothermality and can require an
+inordinate amount of force to correct.&nbsp; They are worth correcting
+if the mirror is in good thermal shape and the seeing is good, but
+otherwise can be safely left alone.&nbsp; A good rule of thumb is to
+look at the bar graph of RMS phase errors and pick a cutoff point for
+which terms to correct and which to ignore.&nbsp; If the conditions are
+good, use about 100 nm or even 50 nm if it's <span
+ style="font-style: italic;">really</span> good.&nbsp; Otherwise, go
+with 150-200 nm in the interest of time, especially in the case of
+astigmatism which can bounce around quite a bit if it's windy or the
+seeing's bad.&nbsp; <br>
+      </li>
+      <li>Care should be taken when dealing with modes that require a
+lot of force to correct.&nbsp; It is possible to correct for as much as
+1500 nm of spherical aberration, but it would use up a large portion of
+the available force bandwidth.&nbsp; For now it is recommended to leave
+it alone if there's more than 1000 nm.&nbsp; One should also not
+attempt
+to correct for more than about 300-350 nm of high-order spherical,
+especially if there are other aberrations present.&nbsp; Future
+versions
+of the WFS interface will handle these limits more intelligently and
+transparently and include the ability to correct some, but not all, of
+a given mode. <br>
+      </li>
+    </ul>
+  </ol>
+  <ul style="list-style-type: disc;">
+    <li>Once the modes to correct are selected and the corrective
+forces calculated, the corrections are applied via the 'Correct
+Secondary' and 'Correct Primary' buttons.&nbsp; The 'Correct Secondary'
+button will correct for coma and focus by moving the secondary
+accordingly.&nbsp; The commanded secondary motions are reported to the
+file selection dialog.&nbsp; The 'Correct Primary' button will pass the
+calculated force set to the <span style="font-family: monospace;">rcell</span>
+command as well as a focus command to the secondary if a correction for
+spherical aberration is performed.&nbsp; It will report the completion
+of the <span style="font-family: monospace;">rcell</span> command as
+well as any focus adjustments to the file selection dialog.&nbsp; The <span
+ style="font-family: monospace;">rcell</span> output gets redirected to
+the terminal window that's used to start the WFS interface.&nbsp; That
+output will provide detailed dianostic information about the completed <span
+ style="font-family: monospace;">rcell</span> command and whether it
+was
+successful or not.&nbsp; <br>
+    </li>
+    <li>After applying corrections, it is a very good idea to take a
+few frames to check on them and how well they worked.&nbsp; It usually
+takes a few iterations to converge on an ideal solution.&nbsp; Under
+some circumstances the primary corrections may take longer to converge,
+especially if there are significant corrective forces already applied
+or
+if the primary is thermally stressed (e.g., has large radial gradients
+present).&nbsp; It has been observed on several occasions that when
+this occurs, clearing forces with <span style="font-family: monospace;">rcell
+-c</span> and then starting over will yield much faster convergence and
+better results.&nbsp; The cause for this is not fully understood and
+will hopefully get fixed.&nbsp; In the meantime, if you wish to tune
+the primary with the WFS, it is probably best to clear all forces first
+before taking any WFS data just to be sure there's no problem.&nbsp; <br>
+    </li>
+  </ul>
+</ol>
+<div style="text-align: left;">
+<h4><br>
+</h4>
+<h4>When to Use the WFS</h4>
+<div style="margin-left: 40px;">The WFS can and should be used for all
+initial
+setup.&nbsp; The automatic centroiding and spot association can handle
+a
+range of several hundred um of focus and about 60" of tilt.&nbsp; The
+manual
+overlay mode can double or triple those useful ranges.&nbsp; With one
+or two
+short exposures on a bright star the WFS can almost fully tune
+collimation and focus even with a fairly poor starting point.&nbsp; It
+is
+also recommended to use the WFS to tune the primary as part of initial
+setup in lieu of using startForces.&nbsp;
+Do not apply startForces before or after tuning the primary with the
+WFS.&nbsp; If time does not allow or conditions do not warrant, then it
+is still ok to use startForces in lieu of using the WFS.&nbsp; <br>
+<br>
+If the primary's thermal state remains steady, it will hold its figure
+very well through the course of the night.&nbsp; Frequently, though,
+it's worse at the beginning of the night so any corrections done then
+to correct for that will need to be cleared and then the mirror
+re-tuned in the middle of the night.&nbsp; Unless the conditions are
+extremely good and the observing program requires excellent image
+quality, it shouldn't be necessary to tune the primary more than a few
+times a night at most.&nbsp; Once or twice should be sufficient most of
+the time, especially for spectroscopic programs where image quality is
+not very important at all.&nbsp; <br>
+<br>
+Focus and coma are the most rapidly changing aberrations and the WFS
+can be used to tune them fairly quickly and easily.&nbsp; For imaging
+instruments that lack real-time video, such as Minicam, Flamingos, and
+PISCES, using the WFS is <span style="font-style: italic;">much</span>
+easier and faster than doing a full focus run.&nbsp; <br>
+</div>
+</div>
+<div style="text-align: left;">
+<h4><br>
+</h4>
+<h4>Powering Down/Uninstall</h4>
+<ul>
+  <ul style="list-style-type: disc;">
+    <li>Use the command <span style="font-family: monospace;">/mmt/scripts/wavefront_halt</span>
+from hacksaw, hoseclamp, or alewife to perform a clean shutdown and
+power-off of the wavefront computer.&nbsp; <br>
+    </li>
+    <li>Check the wavefront computer to make sure the fan is off and
+the ethernet LEDs are not lit. <br>
+    </li>
+    <li style="font-weight: bold;">Unplug the Apogee cable from the
+camera end first!!!</li>
+    <li style="font-weight: bold;"><span style="font-weight: normal;">When
+the f/9 topbox is not on the telescope, it is preferred to turn
+wavefront on and place it on the network somewhere to facilitate
+routine
+software maintenance.&nbsp; This should not be an issue once wavefront
+has a permanent home, though. <br>
+      </span></li>
+  </ul>
+</ul>
+<br>
+<hr style="width: 100%; height: 2px;"><span style="font-style: italic;">Tim
+Pickering / <a href="mailto:tim@mmto.org">tim@mmto.org</a><br>
+July 1, 2003<br>
+</span><br>
+</div>
+<ol style="text-align: left;">
+  <ol>
+  </ol>
+</ol>
+</div>
+</body>
+</html>

@@ -1,0 +1,193 @@
+i put an entry in the MMTO menu for 'F/5 Wavefront Sensor'.  This link
+will bring up all of the necessary windows.  the ds9, Wavefront
+Zernikes, wim, and shwfs_f5.tcl are all fairly similar to the f/9
+version of the software.  the Wavefront Zernikes window differs in its
+lack of a 'set reference focus' button and the splitting of focus and
+coma corrections into separate buttons.
+
+the f/5 WFS Interface window is significantly different than its f/9
+analog.  please note that the Science Camera is dead which is why the
+buttons that affect it are greyed out.  the main window is grouped
+into 5 areas:
+
+stage motion - buttons to stow the WFS, move it on axis, or move it to
+some specified position.
+
+camera selection - select between WFS and science cameras and select
+whether WFS points to sky or reference source. i've taken recent
+reference images and they have not changed measurably from previous
+ones so you shouldn't need to mess with that.
+
+science camera config - not used since science camera is dead
+
+camera cooling - toggle and monitor the cooling of the WFS camera
+
+image acquisition - set up and take exposures as in the f/9 interface
+
+less frequently used windows are brought up from the Control menu on
+the main windows menubar.  the menu entries are:
+
+Power on/off - brings up the Power window.  the top six buttons toggle
+power switches within the WFS.  the bottom 2 communicate with the
+switches in the 2nd floor instrument room to toggle power to the WFS
+and WFS drives.  be very careful not to inadvertently turn them off!
+next week i will add pop-ups to them so that a single click won't kill
+the WFS power.
+
+Run PixelLink - brings up the PixelLink Interface.  the PixelLink
+camera is pretty fussy about its configuration so you'll likely want
+to leave the defaults alone.  you may want to change exposure time,
+but shouldn't need to for most WFS stars.  occasionally the first
+image taken after changing exposure time is corrupted, but subsequent
+frames should be fine.
+
+Configure WFS - brings up the f/5 WFS Configuration window.  you'll
+need to use this at the beginning of the night to home the WFS and to
+set the WFS to its default configuration.
+
+WFS Computer - brings up a VNC viewer to the console of the WFS
+computer.  the password is 'wave4us'.  the hostname of the computer is
+f5wave and its IP number is 192.168.1.150 (hacksaw, hoseclamp,
+alewife, and SAO computers can see it, others may not).
+
+if something screws up or you want to check to make sure everything's
+where it's supposed to be, you can login to packrat and run
+/data/mmti/bin/wavedisplay to bring up the full engineering GUI for
+the f/5 WFS.
+
+
+              Start-up Procedure after Partial Shutdown
+
+- bring up the f/5 wavefront sensor from the MMTO menu
+
+- if the WFS computer can't be reached, the f/5 WFS Interface window
+  will report that it failed to connect.  this will be the case after
+  a full shutdown, but hopefully not after a partial shutdown.
+
+- if no errors are reported, bring up the Power window to make sure
+  everything is on.  turn Servo Power on if it's off.  close the Power
+  window once everything is turned on.
+
+- turn on the cooling for the WFS camera.  the temperature should
+  start to update within 5-10 seconds or so.
+
+- bring up the WFS Configuration window and click 'Home WFS' to home
+  and initialize the system.  may not be strictly necessary after a
+  partial shutdown, but it doesn't hurt to do it.
+
+- after the homing is complete, click on the appropriate button to set
+  to either the hecto or megacam default configuration.  once that's
+  done, the WFS Configuration window can be closed.
+
+- bring up the PixelLink window, click 'Configure PixelLink', and take
+  an exposure to test communication to the camera.  likewise take a
+  test exposure with the WFS camera to test it out.  the PixelLink
+  window can be left open for use later or closed and brought back up
+  as needed.
+
+
+                Start-up Procedure after Full Shutdown
+
+- bring up the f/5 wavefront sensor from the MMTO menu
+
+- there will be an error message about failing to connect to the WFS
+  computer.  that is fine.  bring up the Power window and click the
+  button for WFS Computer Power.  wait for about 10 minutes and then
+  click the button for WFS Drive Power.  it will take a few more
+  minutes for the WFS computer to boot.  you can run 'ping f5wave' in
+  a window to monitor when it comes alive.
+
+- when the WFS computer comes back on-line, bring up WFS Computer from
+  the Control menu and enter the password of 'wave4us'.  when the
+  windows console comes up, there will likely be a couple of dialogs
+  up complaining about new USB hardware and enabling automatic
+  updates.  cancel out of all of those.
+
+- once boot-up popups are canceled out of, double-click on the Cygwin
+  icon, run the command 'cd src/waveserv' in the window that opens,
+  and then run the command 'wish waveserv.tcl'.  a small window should
+  pop up that says 'waveserv' and has an exit button.
+
+- after starting waveserv, you will need to wait about 10 minutes or
+  so before bringing up the wavecamr server.  after the wait,
+  double-click on the Cygwin icon once again, do 'cd src/waveserv',
+  and then do 'wish wavecamr.tcl'.  if you get an error, click ok,
+  wait a few minutes, and then try again.  if it doesn't come up after
+  several tries, you may need to shutdown, power cycle, and
+  start-over.
+
+- once the waveserv and wavecamr servers are running happily on the
+  WFS computer, you can close the VNC window.  then go to the Power
+  window and power on the WFS subsystems in this order: SBIG, Puntino,
+  Encoder, and then Servo.  then turn on WFS Camera cooling and follow
+  the rest of the start-up procedure for a partial shutdown.
+
+
+                         Observing Procedure
+
+- the f/5 WFS is more sensitive than the f/9 one so you shouldn't need
+  to go any brighter than 9th mag for a WFS star unless the seeing or
+  conditions are quite bad.  even a 9th mag star in good seeing can
+  saturate spots in 5 sec.
+
+- you can safely move the WFS stage around while the telescope is
+  moving and it is recommended to do this to save time.  remember to
+  CLEAR ANY MOUNT OFFSETS!
+
+- when you're on axis and on the star, run the PixelLink to check the
+  star's position.  the center of rotation is at (650,688) in the
+  image.  if the star is not there, go to the Observe menu and click
+  'Init Pointing'.  move the red circle to center it on the star and
+  then click OK.  take another PixelLink image to check the move, if
+  desired.  if all's well, go ahead and take the WFS frames.
+  analyzing the data is very similar to the f/9 setup.  it is
+  recommended to do an iteration or two of correcting focus and coma
+  before doing an iteration or two of correcting the primary.  if the
+  corrections don't converge well, try longer exposure times or
+  averaging more images.  if thermal is running well, the primary
+  corrections should be fairly small so you shouldn't have to clear
+  forces before doing WFS.  i have not had to while i've been up
+  here.
+
+- when you're done, simply stow the WFS stage.
+
+
+                      Partial Shutdown Procedure
+             (if there is no chance at all of lightning)
+
+- make sure the WFS stage is stowed.
+
+- turn off the WFS camera cooling.  it takes about 15 minutes or so
+  for it to warm back up to ambient.
+
+- bring up the Power window and turn off the Servo power.
+
+- leave everything else powered up and exit the WFS interface.  you
+  don't need to keep the interface open for the camera to warm itself
+  back up.
+
+
+                       Full Shutdown Procedure
+
+- make sure the WFS stage is stowed.
+
+- turn off the WFS camera cooling.  try to give this as much time as
+  you can to avoid thermally stressing the CCD.  at least 15 minutes
+  is preferable, but if you can give it even a few minutes that helps
+  a lot.
+
+- after giving the WFS camera as much time as possible to warm up,
+  bring up the Power window and turn the subsystems off in this order:
+  Servo, Encoder, Puntino, and SBIG.
+
+- after the WFS subsystems are powered down, bring up the WFS computer
+  VNC session and click the Exit button for the waveserv and wavecamr
+  servers.  i think you want to Exit wavecamr first.
+
+- close the Cygwin windows, click Start, and select 'Turn Off
+  Computer'.  Then click 'Turn Off'.  the VNC window will disappear
+  immediately, but it will take 10-20 sec for the computer to be
+  safely shutdown and powered off.
+
+- once the WFS computer is safely powered off, go to the Power window
+  and turn off WFS Drive Power and WFS Computer Power.

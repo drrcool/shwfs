@@ -1,0 +1,10 @@
+<?xml version="1.0" standalone="no"?> <!--*- mode: xml -*-->
+<!DOCTYPE glade-project SYSTEM "http://glade.gnome.org/glade-project-2.0.dtd">
+
+<glade-project>
+  <name>wfscat</name>
+  <program_name>wfscat</program_name>
+  <gnome_support>FALSE</gnome_support>
+  <use_widget_names>TRUE</use_widget_names>
+  <gnome_help_support>TRUE</gnome_help_support>
+</glade-project>

@@ -1,0 +1,17 @@
+
+open program THomeProgram
+ clear
+
+  if ( CHomeFlag = 0 ) 
+	PrgError(ErrCNotOnFlag)
+  endif
+
+  HomeInit(T)
+
+  HomeToLimit(T, P)
+  HomeToLimit(T, M)
+
+  HomeToFlags(T)
+
+  HomeDone(T)
+close 

@@ -1,0 +1,560 @@
+#!/usr/bin/ruby
+
+require 'libglade2'
+require 'thread'
+require 'timeout'
+require 'socket'
+require '/mmt/admin/srv/tcs_lookup.rb'
+
+if ENV['WFSROOT'] 
+  require "#{ENV['WFSROOT']}/msg.rb"
+else
+  require '/mmt/shwfs/msg.rb'
+end
+
+Thread.abort_on_exception = true
+
+### define the main GUI window
+class MainWindow
+  include MSG
+  
+  def initialize(mode, inst)
+    @mode = mode
+    @inst = inst
+
+    @hexhost, @hexport = srv_lookup('hexapod')
+    @mounthost, @mountport = srv_lookup('mount-mini')
+    @cellhost, @cellport = srv_lookup('cell-mini')
+    @hostname = "hacksaw"
+
+    if ENV['WFSROOT']
+      @path = ENV['WFSROOT']
+      @dir = "#{@path}/datadir"
+      @netdir = "/net/#{@hostname}#{@path}/datadir"
+    else
+      @path = "/mmt/shwfs"
+      @dir = "/mmt/shwfs/datadir"
+      @netdir = "/net/#{@hostname}/home/mmt/shwfs/datadir"
+    end
+
+    @glade = GladeXML.new("#{@path}/glade/auto_correct.glade") {|handler| method(handler)}
+
+    @mainwindow = @glade.get_widget("MainWindow")
+    @mainwindow.set_title("AutoWFS GUI")
+    @status = @glade.get_widget("StatusBar")
+    @menubar = @glade.get_widget("menubar1")
+
+    @list = ""
+
+    # load reference X and Y values for pupil
+    @xref = 256.0
+    @yref = 256.0
+
+    @rotoff = Hash.new
+    @rotoff['F9'] = -225.0
+    @rotoff['F5'] = 234.0
+
+    @hexscale = Hash.new
+    #@hexscale['F9'] = 6.0*0.12
+    #@hexscale['F5'] = 0.135/0.297
+
+    @hexscale['F9'] = 0.12
+    @hexscale['F5'] = 0.135
+
+    @xparity = Hash.new
+    @yparity = Hash.new
+    @xparity['F5'] = -1.0
+    @yparity['F5'] = 1.0
+    @xparity['F9'] = 1.0
+    @yparity['F9'] = -1.0
+
+    @centol = 25.0
+
+    @abort = false
+
+    # exposure configuration
+    @abort_but = @glade.get_widget("Abort")
+    @abort_but.set_sensitive(false)
+    @correct = @glade.get_widget("Correct")
+    @niter = @glade.get_widget("NIter")
+    @exptime = @glade.get_widget("ExpTime")
+    @fileentry = @glade.get_widget("FileEntry")
+    @fileentry.set_text("auto_wfs")
+    @tweak = @glade.get_widget("Tweak")
+    @tweakm2 = @glade.get_widget("TweakM2")
+    @megacam = @glade.get_widget("MegaCam")
+    @megacam.child.set_text("Offset Hexapod to #{inst} Center")
+    @wfsock = nil
+  end
+
+  def wfsopen
+    unless @wfsock
+      # report("Before srv_lookup")
+      whost, wport = srv_lookup('wfs')
+      # whost = "localhost"
+      # wport = 6868
+      # report("Before sockopen")
+      @wfsock = sockopen(whost, wport)
+      # report("After srv_lookup")
+    end
+  end
+
+  def wfsclose
+    if @wfsock
+      @wfsock.close
+      @wfsock = nil
+    end
+  end
+
+  def on_Abort_clicked
+    @abort = true
+  end
+
+  # check to see if there's a pupil in the image and, if so, where it is
+  def check_pupil(fitsfile)
+    # report("Before Center")
+    # center = `#{@path}/get_pupil_center #{fitsfile} #{@mode} 2> /dev/null`
+    f = IO.popen("#{@path}/get_pupil_center #{fitsfile} #{@mode}")
+    center = f.gets
+    # report("After Center")
+    if center =~ /No pupil/
+      return false
+    else
+      xcen, ycen = center.split()
+      xcen = xcen.to_f
+      ycen = ycen.to_f
+      return [xcen, ycen]
+    end
+  end
+
+  # given current pupil center, calc hexapod move to center it on WFS
+  def center_pupil(x, y)
+    # check if we're close enough
+    xdist = x - @xref
+    ydist = y - @yref
+    xdist = xdist*@xparity[@mode]
+    ydist = ydist*@yparity[@mode]
+
+    dist = Math::sqrt(xdist*xdist + ydist*ydist)
+    if dist < @centol 
+      return true
+    else
+      # get instrument rotator angle
+      # rotangle = `echo "get rot" | nc #{@mounthost} #{@mountport}`.to_f
+      f = IO.popen("echo 'get rot' | nc #{@mounthost} #{@mountport}")
+      rotangle = f.gets.chomp.to_f
+      angle = Math::PI*(rotangle + @rotoff[@mode])/180.0
+      daz = @hexscale[@mode]*(xdist*Math::cos(angle) + ydist*Math::sin(angle))
+      del = @hexscale[@mode]*(-1.0*xdist*Math::sin(angle) + 
+			      ydist*Math::cos(angle))
+
+      report("Moving hexapod to center pupil....")
+
+      puts "X = #{x}, Y = #{y}"
+      puts "Xcen = #{@xref}, Ycen = #{@yref}"
+      puts "Del = #{del}, Daz = #{daz}"
+
+#      socket = sockopen("hacksaw", 5350)
+#      msg_cmd(socket, 'tiltxerr_zc', del)
+#      msg_cmd(socket, 'tiltyerr_zc', daz)
+#      socket.close
+#      socket = nil
+      system("echo \"offset_zc wfs tx #{del}\" | nc -w 5 #{@hexhost} #{@hexport}")
+      system("echo \"offset_zc wfs ty #{daz}\" | nc -w 5 #{@hexhost} #{@hexport}")
+      system("echo \"apply_offsets\" | nc -w 5 #{@hexhost} #{@hexport}")
+      wait4hexapod
+      wait4hexapod
+      return false
+    end
+  end
+
+  # calc hexapod move to center up on megacam 
+  def center_megacam
+    unless @inst == 'MegaCam' || @inst == 'SWIRC' || @inst == 'Hecto'
+      return
+    end
+    # check if we're close enough
+    if @inst == 'SWIRC'
+#      xdist = 256 - 240.7
+#      ydist = 256 - 240.86
+      xdist = 256 - 231.5
+      ydist = 256 - 212.4
+    else
+      xdist = 256 - 231.5
+      ydist = 256 - 212.4
+    end
+    xdist = xdist*@xparity[@mode]
+    ydist = ydist*@yparity[@mode]
+
+    dist = Math::sqrt(xdist*xdist + ydist*ydist)
+
+    # get instrument rotator angle
+    # rotangle = `echo "get rot" | nc #{@mounthost} #{@mountport}`.to_f
+    f = IO.popen("echo 'get rot' | nc #{@mounthost} #{@mountport}")
+    rotangle = f.gets.chomp.to_f
+    angle = Math::PI*(rotangle + @rotoff[@mode])/180.0
+    daz = @hexscale[@mode]*(xdist*Math::cos(angle) + ydist*Math::sin(angle))
+    del = @hexscale[@mode]*(-1.0*xdist*Math::sin(angle) + 
+			    ydist*Math::cos(angle))
+
+    report("Moving hexapod to center up on #{@inst}....")
+
+    #puts "Xcen = #{@xref}, Ycen = #{@yref}"
+    #puts "Del = #{del}, Daz = #{daz}"
+
+    system("echo \"offset_zc wfs tx #{del}\" | nc -w 5 #{@hexhost} #{@hexport}")
+    system("echo \"offset_zc wfs ty #{daz}\" | nc -w 5 #{@hexhost} #{@hexport}")
+    if @inst == 'SWIRC'
+      system("echo \"offset_inc wfs z -30.0\" | nc -w 5 #{@hexhost} #{@hexport}")
+    end
+    system("echo \"apply_offsets\" | nc -w 5 #{@hexhost} #{@hexport}")
+    wait4hexapod
+    wait4hexapod
+    report("Hexapod aligned for #{@inst}.")
+    return true
+  end
+
+  # kill the main window on a destroy
+  def on_MainWindow_destroy
+    wfsclose
+    Gtk.main_quit
+  end
+
+  # routine to print to statusbar
+  def report(text)
+    @status.pop(0)
+    @status.push(0, text)
+  end
+
+  # menubar callbacks
+  def on_quit_activate
+    wfsclose
+    Gtk.main_quit
+  end
+
+  def hexapod_log
+    hexlog = "#{@dir}/hexapod.log"
+    # date = `date -\u +'%H_%M_%S'`.chomp
+    f = IO.popen("date -\u +'%H_%M_%S'")
+    date = f.gets.chomp
+    celllog = "#{@dir}/#{date}.celllog"
+    offsetlog = "#{@dir}/#{date}.offsets"
+    system("touch #{hexlog}")
+    system("touch #{celllog}")
+    system("/mmt/shwfs/getm2info >> #{hexlog}")
+    system("echo \"all\" | nc #{@cellhost} #{@cellport} > #{celllog}")
+    system("echo \"all\" | nc #{@hexhost} #{@hexport} | grep off_ | grep applied > #{offsetlog}")
+  end
+
+  def disable
+    @megacam.set_sensitive(false)
+    @correct.set_sensitive(false)
+    @tweak.set_sensitive(false)
+    @tweakm2.set_sensitive(false)
+    @abort_but.set_sensitive(true)
+  end
+
+  def enable
+    @abort_but.set_sensitive(false)
+    @correct.set_sensitive(true)
+    @tweak.set_sensitive(true)
+    @tweakm2.set_sensitive(true)
+    @megacam.set_sensitive(true)
+  end
+
+  def on_about1_activate
+    report("First cut at a remote WFS interface")
+  end
+
+  def m2correct
+    report("Applying Hexapod Corrections....")
+    wfsopen
+    msg_cmd(@wfsock, "recenter", nil)
+    msg_cmd(@wfsock, "corr_coma", nil)
+    msg_cmd(@wfsock, "corr_focus", nil)
+    wfsclose
+    wait4hexapod
+    wait4hexapod
+    report("Corrections Applied.")
+    hexapod_log
+    return true
+  end
+
+  def fullcorrect
+    report("Applying Cell and Hexapod Corrections....")
+    wfsopen
+    msg_cmd(@wfsock, "recenter", nil)
+    msg_cmd(@wfsock, "corr_coma", nil)
+    msg_cmd(@wfsock, "corr_focus", nil)
+    msg_cmd(@wfsock, "corr_primary", nil)
+    wfsclose
+    wait4hexapod
+    wait4hexapod
+    report("Corrections Applied.")
+    hexapod_log
+    return true
+  end
+
+  def wait4hexapod
+    hhost, hport = srv_lookup('hexapod-msg')
+    socket = sockopen(hhost, hport)
+    inmotion = 1
+    sleep(2)
+    loop do
+      inmotion = msg_get(socket, 'motionFlag').to_i
+      break if inmotion == 0
+      sleep(1)
+    end
+    socket.close if socket
+    socket = nil
+    sleep(2)
+  end
+
+  def corr_dialog(type)
+    dialog = Gtk::Dialog.new
+    dialog.title = "OK to Apply Corrections?"
+    #dialog.transient_for = @mainwindow
+    dialog.set_default_size(100, 100)
+    dialog.vbox.add(Gtk::Label.new("Apply Corrections?"))
+    
+    dialog.add_button("OK", Gtk::Dialog::RESPONSE_OK)
+    dialog.add_button(Gtk::Stock::CANCEL, Gtk::Dialog::RESPONSE_CANCEL)
+    dialog.set_default_response(Gtk::Dialog::RESPONSE_CANCEL)
+
+    dialog.signal_connect("response") do |widget, response|
+      case response
+      when Gtk::Dialog::RESPONSE_OK
+	if type == "full"
+	  fullcorrect
+	else
+	  m2correct
+	end
+	dialog.destroy
+	@continue = true
+	@cancel = false
+	report("Corrections Applied.")
+      when Gtk::Dialog::RESPONSE_CANCEL
+	report("Correction Application Canceled.")
+	dialog.destroy
+	@continue = true
+	@cancel = true
+      end
+    end
+    dialog.show_all
+  end
+
+  # configure and take exposures
+  def Expose(nexp)
+    exptime = @exptime.value.to_f
+    file = @fileentry.text
+
+    n = 1
+    ngood = 0
+    ntry = 0
+    until (ngood == nexp) || (ntry == 2) || @abort
+      # figure out the filename
+      if file == "test"
+	fullfilename = "#{@dir}/#{file}.fits"
+	netfullfilename = "#{@netdir}/#{file}.fits"
+	filename = "#{file}.fits"
+	system("rm -f #{fullfilename}")
+      else
+	num = 0
+	fullfilename = sprintf("%s/%s_%04d.fits", @dir, file, num)
+	netfullfilename = sprintf("%s/%s_%04d.fits", @netdir, file, num)
+	filename = sprintf("%s_%04d.fits", file, num)
+	while test(?e, fullfilename) 
+	  num = num + 1
+	  fullfilename = sprintf("%s/%s_%04d.fits", @dir, file, num)
+	  netfullfilename = sprintf("%s/%s_%04d.fits", @netdir, file, num)
+	  filename = sprintf("%s_%04d.fits", file, num)
+	end
+      end
+
+      # get exposure timer going....
+      if exptime > 1
+	count = Thread.new {
+	  left = exptime.to_i
+	  left.times {
+	    report("Exposing \##{n} (#{filename})...#{left} sec left.")
+	    sleep(1)
+	    left = left - 1
+	  }
+	  report("Reading out \##{n} (#{filename})....")
+	}
+      else
+	report("Exposing \##{n} (#{filename})....")
+      end
+
+      # perform exposure
+      begin
+	timeout(exptime+30) {
+	  if (@mode == "F5")
+	    system("#{@path}/getimage #{exptime} #{fullfilename}")
+	  else
+	    system("sudo -u mmtop /usr/bin/rsh -n -l tim f9wfs \"/home/tim/get_apogee_image.tcl #{exptime} #{filename} \> /dev/null\"")
+	    system("sudo -u mmtop /usr/bin/rcp tim@f9wfs:/home/tim/#{filename} #{fullfilename}")
+	    system("sudo -u mmtop /usr/bin/rsh -n -l tim f9wfs \"rm -f #{filename} \> /dev/null\"")
+	    system("sudo -u mmtop chmod g+w #{fullfilename}")
+	  end
+	  if test(?e, fullfilename) 
+	    system("#{@path}/header.pl #{fullfilename} #{exptime} #{@mode}")
+	  else
+	    report("Image acquisition failed. Check WFS Computer.")
+	    @abort = true
+	    return
+	  end
+	}
+      rescue Timeout::Error
+	report("Exposure Timed Out.")
+	@abort = true
+	return
+      rescue => why
+	report("Exposure Failed: #{why}.")
+	@abort = true
+	return
+      end
+
+      system("/usr/bin/xpaset -p WFS zoom to 1.0")
+      system("/usr/bin/xpaset -p WFS file #{fullfilename}")
+
+      # got the image, now check it to see if anything is there
+      pupil = check_pupil(fullfilename)
+      if pupil
+	# got a pupil, do something
+	x, y = pupil
+	centered = center_pupil(x, y)
+	if centered
+	  if @list == ""
+	    @list = "#{fullfilename}"
+	  else 
+	    @list = @list + ",#{fullfilename}"
+	  end
+	  ngood = ngood + 1
+	else 
+	  @list = ""
+	end
+      else
+	if ntry == 0
+	  exptime = 2.0*exptime
+	  report("No pupil found. Doubling exposure time.")
+	else
+	  exptime = exptime/(ntry+1)
+	  report("Reducing exposure time in case of bad seeing.")
+	end
+	sleep(1)
+	ntry = ntry + 1
+      end
+      n = n + 1
+    end
+    report("Completed Exposures")
+  end
+
+  def on_Correct_clicked
+    disable
+    Thread.new {
+      iter = @niter.value_as_int
+      iter.times {
+	Expose(3)
+	if @abort || @list == ""
+	  @list = ""
+	  report("Analysis Aborted.")
+	  break
+	else
+	  centroid
+	  @continue = false
+	  @cancel = false
+	  corr_dialog("full")
+	  loop do
+	    break if @continue
+	    sleep(1)
+	  end
+	  @list = ""
+	  break if @cancel
+	end
+      }
+      if @cancel || @abort 
+	@abort = false
+	@cancel = false
+	enable
+	@list = ""
+	report("Analysis Aborted.")
+      else
+	@list = ""
+	Expose(3)
+        if @abort || @list == ""
+          @list = ""
+          report("Analysis Aborted.")
+        else
+	  centroid
+	  @list = ""
+	end
+      end
+      enable
+    }
+  end
+
+  def on_Tweak_clicked
+    disable
+    Thread.new {
+      fullcorrect
+      Expose(3)
+      if @abort || @list == ""
+	@abort = false
+	enable
+	@list = ""
+	report("Analysis Aborted.")
+      else
+	centroid
+	@list = ""
+	enable
+      end
+    }
+  end    
+
+  def on_MegaCam_clicked
+    disable
+    Thread.new {
+      center_megacam
+      enable
+    }
+  end
+
+  def on_TweakM2_clicked
+    disable
+    Thread.new {
+      m2correct
+      Expose(1)
+      if @abort || @list == ""
+	@abort = false
+	enable
+	@list = ""
+	report("Analysis Aborted.")
+      else
+	centroid
+	@list = ""
+	enable
+      end
+    }
+  end
+
+  def centroid
+    report("Centroiding....")
+    wfsopen
+    # report("Before msg_cmd centroid....")
+    msg_cmd(@wfsock, "centroid", @list)
+    # report("After msg_cmd centroid....")
+    wfsclose
+    report("Centroiding Complete.")
+  end
+
+end
+
+if !(ARGV[0] == "F5" || ARGV[0] == "F9")
+  puts "Specify F5 or F9."
+else
+  # get the ball rolling!
+  Gtk.init
+  MainWindow.new(ARGV[0], ARGV[1])
+  Gtk.main
+end

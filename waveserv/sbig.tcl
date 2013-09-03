@@ -1,0 +1,333 @@
+
+
+package require critcl
+package provide sbig 1.0
+
+namespace eval sbig {
+
+    critcl::cheaders sbigudrv.h sbig.h
+    critcl::ccode {
+	#include "sbig.h"
+	#include "sbigudrv.h"
+
+	unsigned short	*sbig_buff;
+	int	 sbig_line;
+
+	int sbig_bin;
+	int sbig_x1;
+	int sbig_y1;
+	int sbig_xdata;
+	int sbig_ydata;
+
+	int sbig_W;
+	int sbig_H;
+
+	double sbig_setp = 0;
+
+	void swap2(buff, npix)
+		unsigned short *buff;
+		int    npix;
+	{
+	    unsigned char c;
+	    int i;
+
+	    for ( i=0; i < npix; i++ )
+	    {
+	     buff[i] = buff[i] + 32768; 
+	    }
+
+	    for ( i=0; i < npix; i++, buff++ ) 
+	    {
+	     c = *((unsigned char *) buff);
+	     *((unsigned char *) buff)   = *((unsigned char *) buff+1);
+	     *((unsigned char *) buff+1) = c;
+	    }
+	}
+
+
+#include <math.h>
+#define T0            25.0
+#define MAX_AD        4096
+#define R_RATIO       2.57
+#define R_BRIDGE      10.0
+#define DT            25.0
+#define R0            3.0
+
+	double sbigADtoTemp ( int AD )
+	{
+	    double r;
+	    double T;
+	    r = R_BRIDGE / ((double)MAX_AD / AD - 1.0);
+	    T = T0 - DT * ( log (r / R0) / log (R_RATIO) );
+	    return T;
+	}
+	int sbigTemptoAD ( double T )
+	{
+	    double r;
+	    int ad;
+	    r = R0 * exp ( log (R_RATIO) * (T0 - T) / DT );
+	    ad = MAX_AD / (R_BRIDGE / r + 1.0);
+	    return ad;
+	}
+    }
+
+    critcl::clibraries {C:\\Windows\\system32\\SBIGUDrv.dll}
+
+    proc init { camera } {
+	sbig::link
+	sbig::malloc
+	sbig::setbox 0 1 512 1 1 512 1
+	sbig::expoend
+	sbig::readend
+    }
+
+    critcl::cproc malloc { } void {
+	    sbig_buff = (unsigned short *) malloc(512 * 512 * 2);
+    }
+
+    proc nx    { } { return 512; }
+    proc ny    { } { return 512; }
+
+    proc unlink { } { } 
+    proc abort { } { } 
+
+    critcl::cproc link { Tcl_Interp* interp } ok {
+		int type;
+
+	SBIG(interp, CC_OPEN_DRIVER, NULL, NULL);
+
+	{   OpenDeviceParams in = { 0x7F00, 0, 0 };
+
+	    SBIG(interp, CC_OPEN_DEVICE, &in, NULL);
+	}
+	{   EstablishLinkParams  in  = { 0 };
+	    EstablishLinkResults out;
+
+	    SBIG(interp, CC_ESTABLISH_LINK, &in, NULL);
+
+	    type = out.cameraType;
+	}
+
+	TclReturnInt(interp, type);
+    }
+
+    critcl::cproc done { Tcl_Interp* interp } ok {
+	if ( sbig_buff )
+	    free(sbig_buff);
+
+	SBIG(interp, CC_CLOSE_DEVICE, NULL, NULL);
+	SBIG(interp, CC_CLOSE_DRIVER, NULL, NULL);
+	TclReturnOK(interp);
+    }
+
+    critcl::cproc stat { Tcl_Interp* interp char* statx } ok {
+	    char *result = "Huh?";
+
+	if ( !strcmp(statx, "Idle")     ) { result = "Idle"; }
+	if ( !strcmp(statx, "Exposing") ) {
+	    QueryCommandStatusParams  in;
+	    QueryCommandStatusResults out;
+
+	    in.command = 1;
+	    SBIG(interp, CC_QUERY_COMMAND_STATUS, &in, &out);
+
+	    switch ( out.status ) {
+		case 0: result = "Idle";	break;
+		case 1: result = "Progress";	break;
+		case 2: result = "Exposing";	break;
+		case 3: {
+		 EndExposureParams  in;
+
+		 in.ccd  	= 0;
+
+		 SBIG(interp, CC_END_EXPOSURE, &in, NULL);
+		 result = "Exposed";
+	 	 break;
+		}
+	    }
+	}
+	if ( !strcmp(statx, "Reading")     ) { result = "Read"; }
+
+	Tcl_SetResult(interp, result,     TCL_DYNAMIC);
+	return TCL_OK;
+    }
+
+    proc info { n } {
+	return ""
+    }
+
+    proc expose { exptype expose } {
+	sbig::expostart [expr ![string compare $exptype light]] $expose
+    }
+    critcl::cproc expostart { Tcl_Interp* interp int shutter double exptime } ok {
+	StartExposureParams  in;
+
+	in.ccd  	= 0;
+	in.exposureTime = exptime * 100;
+	in.abgState	= 0;
+	in.openShutter	= shutter;
+
+	SBIG(interp, CC_START_EXPOSURE, &in, NULL);
+	TclReturnOK(interp);
+    }
+
+    critcl::cproc expoend { Tcl_Interp* interp } ok {
+	EndExposureParams  in;
+
+	in.ccd  	= 0;
+
+	SBIG(interp, CC_END_EXPOSURE, &in, NULL);
+	TclReturnOK(interp);
+    }
+
+    critcl::cproc readstart { Tcl_Interp* interp } ok {
+	StartReadout(interp, sbig_bin
+			   , sbig_x1/sbig_bin, sbig_y1/sbig_bin
+			   , sbig_W          , sbig_H);
+
+	memset(sbig_buff, 0, sbig_W * sbig_H * 2);
+	sbig_line = 0;
+
+	TclReturnOK(interp);
+    }
+    critcl::cproc readline { Tcl_Interp* interp } ok {
+	ReadLine(interp, sbig_bin, sbig_x1/sbig_bin, sbig_W
+			    , &sbig_buff[sbig_line++*sbig_W]);
+	TclReturnInt(interp, sbig_line);
+    }
+
+    critcl::cproc readend { Tcl_Interp* interp } ok {
+	ReadEnd(interp);
+	TclReturnOK(interp);
+    }
+
+    critcl::cproc data { Tcl_Interp* interp int n } ok {
+	Tcl_Obj *obj = Tcl_GetObjResult(interp);
+	int      err;
+
+	swap2(sbig_buff, sbig_W * sbig_H);
+
+	Tcl_SetByteArrayObj(obj, sbig_buff, sbig_W * sbig_H * 2);
+	return TCL_OK;
+    }
+
+    critcl::cproc cooler { Tcl_Interp* interp int onoff } ok {
+	    SetTemperatureRegulationParams     in;
+	    int err;
+
+	    sbig_setp      = onoff ? -20.0 : 10.0;
+
+	    in.regulation  = onoff;
+	    in.ccdSetpoint = sbigTemptoAD(sbig_setp);
+
+	err = SBIGUnivDrvCommand(CC_SET_TEMPERATURE_REGULATION
+			, (void *) &in, (void *) NULL);
+	TclReturnInt(interp, err);
+    }
+
+    critcl::cproc setp { Tcl_Interp* interp } ok {
+	int onoff, T, A;
+
+	TclReturnInt(interp, (int) sbig_setp);
+    }
+
+    critcl::cproc temp { Tcl_Interp* interp } ok {
+	int onoff, T, A;
+
+	Temperature(interp, onoff, A, T);
+	T = sbigADtoTemp((double) T);
+	TclReturnInt(interp, T);
+    }
+
+    critcl::cproc x1    { } int { return sbig_x1; }
+    critcl::cproc y1    { } int { return sbig_y1; }
+    critcl::cproc xdata { } int { return sbig_xdata; }
+    critcl::cproc ydata { } int { return sbig_ydata; }
+    critcl::cproc xbin  { } int { return sbig_bin; }
+    critcl::cproc ybin  { } int { return sbig_bin; }
+
+    critcl::cproc B { } int { return 16; }
+    critcl::cproc W { } int { return sbig_W; }
+    critcl::cproc H { } int { return sbig_H; }
+
+    proc read { } {
+	sbig::readstart
+	for { set ny [sbig::H] } { [sbig::readline] < $ny } {} { } 
+	sbig::readend
+    }
+
+    proc getbox { n } {
+	return "x1 [sbig::x1] xdata [sbig::xdata] xbin [sbig::xbin] y1 [sbig::y1] ydata [sbig::ydata] ybin [sbig::ybin]"
+    }
+    proc setbox { n x1 xdata xbin y1 ydata ybin } {
+	sbig::_setbox $x1 $xdata $xbin $y1 $ydata $ybin
+	sbig::getbox $n
+    }
+
+    critcl::cproc _setbox { int x1 int xdata int xbin int y1 int ydata int ybin } void {
+	if ( xbin < 1 ) xbin = 1;
+	if ( xbin > 3 ) xbin = 3;
+
+	sbig_bin   = xbin;
+
+	sbig_x1    =    (x1/sbig_bin) * sbig_bin;
+	sbig_y1    =    (y1/sbig_bin) * sbig_bin;
+	sbig_xdata = (xdata/sbig_bin) * sbig_bin;
+	sbig_ydata = (xdata/sbig_bin) * sbig_bin;
+
+	sbig_W  = sbig_xdata;
+	sbig_H  = sbig_ydata;
+    }
+
+    proc write { filename } {
+	set file [open $filename.fit w]
+	fconfigure $file -translation binary
+
+	set cards 0
+	incr cards; puts -nonewline $file [fitscard SIMPLE  %s T]
+	incr cards; puts -nonewline $file [fitscard BITPIX  %d 16]
+	incr cards; puts -nonewline $file [fitscard BSCALE  %d 1]
+	incr cards; puts -nonewline $file [fitscard BZERO  %d 32768]
+	incr cards; puts -nonewline $file [fitscard NAXIS  %d 2]
+	incr cards; puts -nonewline $file [fitscard NAXIS1 %d [sbig::W]]
+	incr cards; puts -nonewline $file [fitscard NAXIS2 %d [sbig::H]]
+        incr cards; puts -nonewline $file [binary format A80 END]
+
+	set padd [expr (2880-[expr $cards * 80]%2880)%2880]
+	puts -nonewline $file [binary format A$padd {}]
+
+	set data [sbig::data]
+	puts -nonewline $file $data
+
+	set padd [expr (2880-[string length $data]%2880)%2880]
+	puts -nonewline $file [binary format A$padd {}]
+
+	close $file
+    }
+}
+
+proc fitscard { name type value { comment {} } } {
+  binary format {A8A2A32A3A35} $name "= " [format $type $value] " / " $comment
+}
+
+    if { 0 } {
+	sbig::init
+	if { [catch {
+		sbig::setp 0 0
+		sbig::bin 1 1
+		sbig::box 0 0 512 512
+		sbig::expostart 1 1
+		while { [set s [sbig::stat 1]] != 3 } { puts $s }
+		sbig::expoend
+		sbig::read 
+		sbig::write SBIG
+	} reply] } {
+		sbig::done
+		puts $reply
+		exit
+	}
+
+	sbig::done
+    }
+
+

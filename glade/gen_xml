@@ -1,0 +1,27 @@
+#!/bin/ruby
+
+def convert ( old )
+    new = old.sub /\.glade/, ".xml"
+    cmd = "gtk-builder-convert #{old} #{new}"
+    system cmd
+end
+
+glades = %w(
+auto_correct.glade
+elcoll_gui.glade
+f5wfs_config.glade
+f5wfs_config_tng.glade
+f5wfs_gui.glade
+f5wfs_pix.glade
+f5wfs_power.glade
+f9wfs_gui.glade
+maestro.glade
+mmirs_gui.glade
+stellacam.glade
+tempfoc_gui.glade
+wfscat.glade
+)
+
+glades.each { |g| convert g }
+
+# THE END

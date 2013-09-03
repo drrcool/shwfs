@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=F/9 Wavefront Sensor for Blue Channel
+Comment=F/9 Wavefront Sensor for Blue Channel
+Exec=/mmt/shwfs/shwfs_unified.tcl F9 Blue
+Icon=/mmt/admin/desktop/shwfs_f9.png
+Terminal=true
+MultipleArgs=false
+Type=Application
+Encoding=UTF-8
+X-Desktop-File-Install-Version=0.3
+Categories=Application;MMT;WFS;

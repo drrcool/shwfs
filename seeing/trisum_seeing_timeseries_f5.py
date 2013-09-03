@@ -1,0 +1,130 @@
+#!/usr/bin/env python
+#===============================================================================
+#
+# Python Numpy/Scipy program for analyzing MMTO WFS seeing data.
+#
+#===============================================================================
+
+import numpy as np
+import matplotlib.cm as cm
+import matplotlib.pyplot as plt
+import matplotlib.dates as dates
+import scipy.stats as stats
+import MySQLdb
+import math
+
+from datetime import datetime
+
+params = {'axes.labelsize': 14,
+          'axes.fontsize' : 14,
+          'axes.set_aspect': 14,
+          'text.fontsize': 12,
+          'legend.fontsize': 14,
+          'xtick.labelsize': 14,
+          'ytick.labelsize': 14,
+          'figure.facecolor': 'white'}
+
+plt.rcParams.update(params)
+
+plt.rcParams['figure.figsize'] = 12, 8
+
+# Date for beginning for WFS Data
+t1 = "2012-04-01"
+t1_year = 2012
+t1_month = 4
+t1_day = 1
+
+
+# End of study, remains the same...
+t2 = "2012-09-01"
+t2_year = 2012
+t2_month = 9
+t2_day = 1
+
+# Start and end time definition for x-axis
+time_start=dates.date2num(datetime(t1_year,t1_month,t1_day))
+time_end=dates.date2num(datetime(t2_year,t2_month,t2_day))
+
+# Format definition for x-axis
+#years = YearLocator() # every year
+#months = MonthLocator() # every month
+dateFmt = dates.DateFormatter(' %b %Y')
+
+# These may be adjusted for various plotting formats.
+max_y = 5.0 # Maximum seeing to plot
+min_y = 0.2 # Mininum seeing to plot
+
+# The rest stays the same...
+# Blank arrays to hold the X and Y values.
+x = []
+y = []
+
+wfs_f5 = []
+wfs_f9 = []
+wfs_f5_timestamps = []
+wfs_f9_timestamps = []
+
+# Get the MySQL data.
+#
+# Reference:
+# http://mysql-python.sourceforge.net/MySQLdb.html
+db=MySQLdb.connect(user="mmtstaff",passwd="multiple",db="mmtlogs")
+
+# Read in data
+c=db.cursor()
+
+# Execute the SQL command to get the seeing data.
+# c.execute("""SELECT `timestamp`, `see_zenith_as` FROM `wfs_seeing_log` WHERE timestamp > %s AND timestamp < %s AND (`mode` = "F5" OR `mode` = "F9") ORDER BY `wfs_seeing_log`.`timestamp` ASC""", (t1, t2))
+c.execute("""SELECT UNIX_TIMESTAMP(`timestamp`), `see_zenith_as`, `mode` FROM `wfs_seeing_log` WHERE timestamp > %s AND timestamp < %s ORDER BY `wfs_seeing_log`.`timestamp` ASC""", (t1, t2))
+
+# Fetch all the rows in a list of lists.
+results = c.fetchall()
+
+for row in results:
+    timestamp = int(row[0])
+    see_zenith_as = row[1]
+    wfs_mode = row[2]
+    
+    if see_zenith_as >= min_y:
+        if see_zenith_as <= max_y:
+	    print "timestamp = %s" % (datetime.fromtimestamp(timestamp),)
+            if wfs_mode == "F5":
+                wfs_f5_timestamps.append(datetime.fromtimestamp(timestamp))
+                wfs_f5.append(see_zenith_as)
+            else:
+                print "Rejecting row: unknown mode"
+        else:
+            print "Rejecting row: seeing too high"
+    else:
+        print "Rejecting row: seeing too low"
+       
+            
+                
+title_str = """F/5 Seeing Data: %s to %s""" % (t1, t2)
+xlabel_str = 'Date/Time'
+ylabel_str = 'Seeing (Arc Seconds, Corrected to Zenith)'
+
+# disconnect from server
+db.close()
+
+plt.plot_date( wfs_f5_timestamps, wfs_f5, xdate=True, ydate=False, linestyle=' ' )
+plt.legend()
+
+plt.title(title_str, fontsize=18)
+plt.xlabel(xlabel_str, fontsize=14)
+plt.ylabel(ylabel_str, fontsize=14)
+
+plt.grid(True)
+
+plt.axis('tight')
+
+show = True
+if show:
+    plt.show()
+else: 
+    plt.savefig("trisum_seeing_timeseries.png");
+
+
+
+
+

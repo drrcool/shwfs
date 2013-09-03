@@ -1,0 +1,39 @@
+#!/iraf/irafbin/bin.redhat/cl.e -f
+
+# this is just a wrapper to load the daophot package and then run the 
+# given command and arguments there.  this way i can set things like 
+# datapars and daopars on the same command line as the task.  it also 
+# requires one script instead of several to do the trick.
+
+# define these to match desired environment so params get saved and stuff.
+# it works fine without them, though.
+#
+set	home		= "/iraf/iraf/local/"
+#set	imdir		= "HDR$pixels/"
+set	uparm		= "uparm/"
+#set	userid		= "tim"
+
+set arch = ".redhat"
+set stdgraph="uepsf"
+
+set imtype = "fits"
+logver = "IRAF V2.12.2 January 2004"
+
+keep
+
+images
+tv
+noao
+obsutil
+
+keep
+
+{
+	flpr
+	flpr
+	flpr
+	printf("%s\n", args) | cl()
+	del /tmp/iraf*.ps
+	del sgi*.eps
+	logout
+}

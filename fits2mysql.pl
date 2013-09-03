@@ -1,0 +1,168 @@
+#!/usr/bin/perl -w
+
+# This script reads WFS data from  two existing files: the *.fits file and associated
+# *.seeing from a succuessful WFS calcuation.
+# These values are then input into the mmtlogs:wfs_seeing_log database table.
+
+# Needed for pow() function
+use POSIX;
+# Needed MySQL interaction
+use DBI;
+# Needed to read FITS header info
+use Astro::FITS::CFITSIO;
+# Needed to convert FITS date/time string to unix timestamp.
+use Date::Parse;
+
+#
+# Command-line arguments:
+# fits_file: the FITS file name (with path)
+# mode: the mode for the WFS  (i.e., 'F5', 'F9', or  'MMIRS')
+
+# Define some parameters (these were inputs to the insert2mysql() function in seeing.pl):
+# d:  e.g., "2010-04-30"
+# time:  e.g., "16:43:20"
+# exposure time, in decimal seconds
+# azimuth, decimal degrees
+# elevation, decimal degrees
+# rotator angle, decimal degrees
+# airmass
+# psf: (this is the average full width at half maximum (FWHM))
+# see_as (seeing in arc-seconds)
+# mode: F5, F9, MMIRS, etc.
+# fits_file: Fits source file, with path 
+my ($d, $time, $exptime, $az, $el, $rot, $airmass, $psf, $see_as, $mode, $fits_file);
+
+if (@ARGV > 0) {
+    $fits_file = $ARGV[0];
+} else {
+    die "Usage:  fits2myql fits_filename mode";
+}
+
+
+my $filename = $fits_file;
+
+
+$filename =~ s/\.fits//;
+#my $sf = $file . ".sf";
+#my $as = $file . ".allstar";
+my $seeing = $filename . ".seeing";
+#my $cntr = $file . ".center";
+#my $psf_f = $file . ".psf";
+#my $out = $file . ".output";
+
+if (0) {
+    print "fits file:  $fits_file\n";
+    print "seeing file:  $seeing\n"
+}
+
+my $mysql_debug = 0;
+
+# Open mmtlogs:wfs_seeing_log MySQL table
+# New version, with mysqld connection timeout.
+my $database = 'mmtlogs';
+my $table = "wfs_seeing_log";
+my $mysql_timeout = 1.0;
+
+my $status = 0;
+my $fptr = Astro::FITS::CFITSIO::open_file($fits_file,
+                                           Astro::FITS::CFITSIO::READONLY(),$status);
+
+# Date of observation
+$fptr->read_key_str('DATEOBS',$d,undef,$status);
+# UT (not local time...)
+$fptr->read_key_str('UT',$time,undef,$status);
+# exposure time
+$fptr->read_key_str('EXPTIME',$exptime,undef,$status);
+# azimuth
+$fptr->read_key_str('AZ',$az,undef,$status);
+# elevation
+$fptr->read_key_str('EL',$el,undef,$status);
+# rotator angle
+$fptr->read_key_str('ROT',$rot,undef,$status);
+# airmass
+$fptr->read_key_str('AIRMASS',$airmass,undef,$status);
+
+
+# The "mode" can either be read from the FITS header if its "F5" or "F9",
+# or it can be input as the second command-line argument.
+# Reading from the FITS header will work except for "MMIRS", which is 
+# rarely to never used anymore.
+if (@ARGV ==  2) {
+    $mode = $ARGV[1];
+} else {
+    $fptr->read_key_str('SEC',$mode,undef,$status);
+}
+
+# Open the *.seeing file and read the two numbers:  psf and seeing
+open FILE, $seeing or die "Couldn't open file: $!"; 
+my $string = <FILE>;
+close FILE;
+my @array = split(/ /,$string);  
+if (@array == 2) {
+    $psf = $array[0];
+    $see_as = $array[1];
+} else {
+    die "Can't read seeing file";
+}
+
+# Calculating seeing as corrected to zenith.
+# The calculated image seeing are corrected to zenith (by sec(z)^0.6, where z is the zenith angle). 
+# Doing 90 - the elevation angle to get the secant of the zenith angle.
+my $zenith_angle_rads = ((90 -$el)/180.0) * 3.14159265358979;
+my $exponent = 0.6;
+my $see_zenith_as = $see_as * pow( cos($zenith_angle_rads), $exponent );
+
+my $dsn = "DBI:mysql:database=$database;mysql_connection_timeout=$mysql_timeout";
+my $mysql =  DBI->connect($dsn, 'mmtstaff', 'multiple');
+
+if ($mysql) {
+    my $query = "INSERT INTO $table ( ";
+    
+    $query .= "timestamp, exptime, az, el, rot, airmass, psf, see_as, see_zenith_as, mode, fits_file";
+    
+    $query .= ") VALUES ( ";
+    
+    $time =~ s/^\s+//;
+    $time =~ s/\s+$//;   
+    
+    $mode =~ s/^\s+//;
+    $mode =~ s/\s+$//; 
+
+    $see_as =~ s/^\s+//;
+    $see_as =~ s/\s+$//; 
+    
+    # $fits_file =~ s/^.+perl//;
+    $fits_file =~ s/\s+$//;     
+    
+    my $timestamp = $d . " " . $time;
+    print $timestamp . "\n" if 0;
+    my $unix_timestamp = str2time($timestamp);
+    print $unix_timestamp .   " , "  . time() .  "\n" if 0;
+    # Converting UT to local Arizona time!
+    # $query .= "DATE_SUB(" . $mysql->quote($timestamp) . ", INTERVAL 7 HOUR), ";
+    $query .= "DATE_SUB(FROM_UNIXTIME(" . $unix_timestamp . "), INTERVAL 7 HOUR), ";
+    $query .= $mysql->quote($exptime) . ", ";
+    $query .= $mysql->quote($az) . ", ";
+    $query .= $mysql->quote($el) . ", ";
+    $query .= $mysql->quote($rot) . ", ";       
+    $query .= $mysql->quote($airmass) . ", "; 
+    $query .= $mysql->quote($psf) . ", "; 
+    $query .= $mysql->quote($see_as) . ", ";
+    $query .= $mysql->quote($see_zenith_as) . ", ";
+    $query .= $mysql->quote($mode) . ", "; 
+    $query .= $mysql->quote($fits_file); 
+    
+    $query .= ")";
+    
+    # PRINT THE SQL!
+    print "SQL: " . $query . "\n" if $mysql_debug;
+    
+    if (1) {
+        # returns 1 if OK, undefined on error.
+        my $rv = $mysql->do( $query ); 
+        unless ( $rv ) {
+            print "MySQL insert failed for SQL: $query\n";
+        }
+    }
+    $mysql->disconnect();
+}

@@ -1,0 +1,9 @@
+#!/bin/sh
+
+echo "1 expose 0 light $1" | nc -w 10 wavefront 3001 > /dev/null
+sleep $1
+sleep 1
+echo "1 readout" | nc -w 10 wavefront 3001 > /dev/null
+sleep 2
+echo "1 fits 0 1322240" | nc -w 10 wavefront 3001 | tail -n +2 > $2
+echo "1 idle" | nc -w 10 wavefront 3001 > /dev/null

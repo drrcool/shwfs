@@ -1,0 +1,11 @@
+#/bin/sh
+# \
+exec tclsh $CYGROOT"$0" ${1+"$@"}
+
+package require msg	1.0
+
+set lite [lindex $argv 0]
+
+msg_client WAVESERV
+msg_cmd   WAVESERV "plite $lite" 3000
+

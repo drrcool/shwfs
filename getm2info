@@ -1,0 +1,40 @@
+#!/usr/bin/tclsh
+
+package require dns 
+
+source /mmt/scripts/msg.tcl
+
+set tok [dns::resolve _hexapod-msg._tcp.mmto.arizona.edu -type SRV]
+set res [dns::result $tok]
+set port [lindex [lindex [lindex $res 0] 11] 5]
+set host [lindex [lindex [lindex $res 0] 11] 7]
+set env(HEXAPOD) $host:$port
+
+set tok [dns::resolve _telserver._tcp.mmto.arizona.edu -type SRV]
+set res [dns::result $tok]
+set port [lindex [lindex [lindex $res 0] 11] 5]
+set host [lindex [lindex [lindex $res 0] 11] 7]
+set env(TELESCOPE) $host:$port
+
+msg_client HEXAPOD
+msg_client TELESCOPE
+
+lappend results [msg_get TELESCOPE el]
+foreach item {tiltx tilty transx transy focus curr_temp} {
+    lappend results [msg_get HEXAPOD $item]
+}
+lappend results [msg_get TELESCOPE ut]
+
+set command "/mmt/shwfs/getOSStemps"
+set fid [open |$command r]
+set tmp [read $fid]
+close $fid
+
+set data [split $tmp " "]
+
+for {set i 0} {$i <= [expr [llength $data] - 1]} {incr i} {
+    set temp [lindex $data $i]
+    lappend results $temp
+}
+
+puts $results

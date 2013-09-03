@@ -1,0 +1,24 @@
+In general, "datadir" is a directory that gets rolled over for each night,
+and should be carefully left alone.
+
+Notice that for testing, tom sometimes makes datadir a link to an old
+directory (such as datadir_20110727).  But if he does, he doggone well
+better replace the link with the real directory before observing begins
+for the night.
+
+The datadir directory in Tom's private copy on cholla
+is a symbolic link to datadir_mmddyyy
+
+If it is desired to do post-mortem on some specific day,
+the thing to do is, the files can be found in /mmt/wfsdat
+where they are placed by our daily wfs cron script:
+
+On hacksaw, a daily cron script
+(see /etc/cron.daily/0wfsdat_rotate.sh)
+does an rsync of /mmt/shwfs/datadir
+into a directory in /mmt/wfsdat
+(the directory will be named yyyymmdd)
+
+Note that since this rsync is done the morning after,
+the dataset will get named for the day following the
+night of observing (exactly correct for morning data).

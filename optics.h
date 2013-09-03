@@ -1,0 +1,80 @@
+/* this parameter file contains the parameters for the MMT f/9 and f/5
+ * Cass foci. 
+ */
+
+#ifdef F9
+/* numbers for f/9 */
+
+#define lr 12.0	/* link radius in pixels for averaging and
+		   associating spot centroid files */
+
+#define nm_pix 70.61	/* CCD phase shift (nm) per pixel in x and y */
+
+#define ap_sp 0.053 /* hartmann aperture spacing projected onto the
+		       dimensionless entrance pupil */
+
+#define pix_pup 420.0  /* interferogram diameter on CCD in pixels */
+	
+/* this is the diameter of the pupil as seen on the CCD--i.e. it's not
+ * the widest extent of the spots since they don't span the entire
+ * diameter. It's best found by noting the physical projection of the
+ * hartmann mask onto the entrance aperture, and then scaling to the CCD
+ * appropriately. To do this, I note the ratio of the hartmann mask
+ * spacing to the spacing seen on the CCD.  I reduce the pupil size by
+ * this same ratio, since the program calcluates the dimensionless pupil
+ * using CCD coords found on the interferogram. */
+
+#define COBS 0.12 /* dimensionless radius of central obstruction */
+
+#define ERAD 3.25e6 /* entrance pupil radius in microns */
+
+#define FL 5.85e7   /* effective focal length of telescope microns */
+
+#define um_as 284.0 /* micron per arcsec in image plane */
+
+#define NSPOTCOLS 13 /* number of columns of spots in the SH image */
+#define NSPOTROWS 26 /* number of rows of spots in the SH image */
+#define XYMRATIO  1.732 /* xmag/ymag for hex geometry */
+
+/* change this so that it's pixel scale multiplied by some constant */
+#define TILTFACTOR 1881.93 /* scales the spot motions to convert to nm 
+			      of wavefront tilt */
+#endif
+
+#ifdef F5
+
+/* numbers for f/5 */
+
+#define lr 15.0
+#define nm_pix 100.56
+#define ap_sp 0.0636
+#define pix_pup 450.0
+#define COBS 0.28
+#define ERAD 3.25e6
+#define FL 3.355e7
+#define um_as 162.0
+#define NSPOTCOLS 14
+#define NSPOTROWS 14
+#define XYMRATIO 1.0
+#define TILTFACTOR 2133.4
+
+#endif
+
+#ifdef MMIRS
+
+/* numbers for f/5 with MMIRS */
+
+#define lr 12.0
+#define nm_pix 100.56
+#define ap_sp 0.0636
+#define pix_pup 350.0
+#define COBS 0.28
+#define ERAD 3.25e6
+#define FL 3.355e7
+#define um_as 162.0
+#define NSPOTCOLS 14
+#define NSPOTROWS 14
+#define XYMRATIO 1.0
+#define TILTFACTOR 3292.3
+
+#endif

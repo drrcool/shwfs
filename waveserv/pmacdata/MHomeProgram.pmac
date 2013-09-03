@@ -1,0 +1,13 @@
+
+open program MHomeProgram
+ clear
+
+  HomeInit(M)
+
+  HomeToLimit(M, P)
+  HomeToLimit(M, M)
+
+  HomeToFlags(M)
+
+  HomeDone(M)
+close 

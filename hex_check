@@ -1,0 +1,84 @@
+#!/usr/bin/ruby
+
+require 'timeout'
+require 'socket'
+require '/mmt/shwfs/msg.rb'
+
+include Math
+include MSG
+
+zeropoint = Hash.new
+#zeropoint['hecto'] = 13977
+zeropoint['hecto'] = 13913
+zeropoint['megacam'] = 13464
+zeropoint['swirc'] = 9387
+
+config = case ARGV[0]
+	   when /megacam/i then "megacam"
+	   when /hecto/i then "hecto"
+	   when /swirc/i then "swirc"
+	 else 
+	   puts "Usage: hex_predict <megacam|hecto|swirc>"
+	   exit
+	 end
+
+hexapod = sockopen('hexapod', 5350)
+telserver = sockopen('hacksaw', 5403)
+
+focus = msg_get(hexapod, 'focus').to_f
+tiltx = msg_get(hexapod, 'tiltx').to_f
+tilty = msg_get(hexapod, 'tilty').to_f
+transx = msg_get(hexapod, 'transx').to_f
+transy = msg_get(hexapod, 'transy').to_f
+temp = msg_get(hexapod, 'curr_temp').to_f
+el_deg = msg_get(telserver, 'el').to_f
+
+el = el_deg*PI/180.0
+
+temps = `/mmt/shwfs/getOSStemps`.split(' ')
+
+temp = ( (temps[0].to_f + temps[1].to_f + temps[2].to_f + temps[3].to_f)/4.0 + (temps[4].to_f + temps[5].to_f)/2.0 )/2.0
+
+if (el < 0 || temp < -50) 
+  puts "El or Temp is Bogus."
+  exit
+end
+
+puts "Hexapod is at:"
+puts "   focus = #{focus},"
+puts "   tiltx = #{tiltx},"
+puts "   tilty = #{tilty},"
+puts "   transx = #{transx},"
+puts "   transy = #{transy}"
+puts "Telescope is at: El = #{el_deg}, OSS Temp = #{temp} C"
+
+pred_focus = zeropoint[config] - 35.3*temp + 1191.8*sin(el)
+pred_tiltx = 279.6 + 216.3*cos(el)
+pred_tilty = 2.50*temp + 65.9
+pred_transx = 3.54*el - 8.6*temp - 567.9
+pred_transy = 1463.2 + 2235.7*cos(el)
+
+puts "We want to be at:" 
+puts "   focus = #{pred_focus},"
+puts "   tiltx = #{pred_tiltx},"
+puts "   tilty = #{pred_tilty},"
+puts "   transx = #{pred_transx},"
+puts "   transy = #{pred_transy}"
+
+focuserr = "%8.2f" % (pred_focus - focus)
+tiltxerr = "%8.2f" % (pred_tiltx - tiltx)
+tiltyerr = "%8.2f" % (pred_tilty - tilty)
+transxerr = "%8.2f" % (pred_transx - transx)
+transyerr = "%8.2f" % (pred_transy - transy)
+
+puts "Moving hexapod:"
+puts "   #{focuserr} um in focus,"
+puts "   #{tiltxerr} arcsec in tiltx,"
+puts "   #{tiltyerr} arcsec in tilty,"
+puts "   #{transxerr} um in transx,"
+puts "   #{transyerr} um in transy..."
+
+puts "Done."
+
+hexapod.close
+telserver.close

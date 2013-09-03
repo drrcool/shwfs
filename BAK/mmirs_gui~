@@ -1,0 +1,209 @@
+#!/usr/bin/ruby
+
+require 'libglade2'
+require 'thread'
+require 'timeout'
+require 'socket'
+require '/mmt/admin/srv/tcs_lookup.rb'
+require '/mmt/shwfs/msg.rb'
+
+Thread.abort_on_exception = true
+
+### define the main GUI window
+class MainWindow
+  include MSG
+
+  def initialize
+    @path = "/mmt/shwfs"
+    @dir = "/mmt/shwfs/datadir"
+
+    @glade = GladeXML.new("#{@path}/glade/mmirs_gui.glade") {|handler| method(handler)}
+    @getimage = @glade.get_widget("GetImage")
+    @continuous = @glade.get_widget("Continuous")
+    @mainwindow = @glade.get_widget("MainWindow")
+    @status = @glade.get_widget("StatusBar")
+    @menubar = @glade.get_widget("menubar1")
+    @focus = @glade.get_widget("Focus")
+    @coma = @glade.get_widget("Coma")
+    @primary = @glade.get_widget("Primary")
+    @m1_gain = @glade.get_widget("M1_gain")
+    @m2_gain = @glade.get_widget("M2_gain")
+    @turbo = @glade.get_widget("Turbo")
+    @foc1 = -6759
+    @foc2 = 612
+
+    @running = false
+    @wfsock = nil
+    @mmirsock = nil
+    wfsopen
+    @filetime = 0
+    @m1_gain.set_value(0.1)
+    @m2_gain.set_value(0.2)   
+  end
+
+  def wfsopen
+    unless @wfsock
+      whost, wport = srv_lookup('wfs')
+      @wfsock = sockopen(whost, wport)
+    end
+  end
+
+  def wfsclose
+    if @wfsock
+      @wfsock.close
+      @wfsock = nil
+    end
+  end
+
+  def mmirsopen
+    unless @mmirsock
+      whost, wport = srv_lookup('mmirs-wfs')
+      @mmirsock = sockopen(whost, wport)
+    end
+  end
+
+  def mmirsclose
+    if @mmirsock
+      @mmirsock.close
+      @mmirsock = nil
+    end
+  end
+
+  # kill the main window on a destroy
+  def on_MainWindow_destroy
+    wfsclose
+    Gtk.main_quit
+  end
+
+  # routine to print to statusbar
+  def report(text)
+    @status.pop(0)
+    @status.push(0, text)
+  end
+
+  # menubar callbacks
+  def on_quit_activate
+    wfsclose
+    Gtk.main_quit
+  end
+
+  # turbo mode!
+  def on_Turbo_toggled
+    if @turbo.active?
+      @m1_gain.set_sensitive(false)
+      @m2_gain.set_sensitive(false)
+      msg_cmd(@wfsock, "m1_gain", "0.5")
+      msg_cmd(@wfsock, "m2_gain", "1.0")
+    else
+      @m1_gain.set_sensitive(true)
+      @m2_gain.set_sensitive(true)
+      msg_cmd(@wfsock, "m1_gain", @m1_gain.value)
+      msg_cmd(@wfsock, "m2_gain", @m2_gain.value)
+    end
+  end
+
+  # analyze image or list of images
+  def centroid(list)
+    report("Centroiding....")
+    msg_cmd(@wfsock, "centroid", list)
+    report("Centroiding Complete.")
+  end
+
+  # set reference file for wfs
+  def set_ref(file)
+    camera = `funhead #{file} | grep WFSNAME | awk '{print $3}'`
+    if camera =~ /mmirs1/
+      report("Using Camera #1.")
+      msg_cmd(@wfsock, "setref", @foc1)
+    elsif camera =~ /mmirs2/
+      report("Using Camera #2.")
+      msg_cmd(@wfsock, "setref", @foc2)
+    else
+      report("No camera specified.")
+      sleep(5)
+    end
+    report("Reference set.")
+  end
+
+  # grab latest image
+  def grab_image
+    mmirsopen
+    file = msg_get(@mmirsock, 'filename')
+    time = msg_get(@mmirsock, 'filetime').to_i
+    mmirsclose
+    if file != "none" && time > @filetime
+      report("Got Image.")
+      set_ref(file)
+      centroid(file)
+      @filetime = time
+      return true
+    else
+      report("No New Image.")
+      return false
+    end
+  end    
+
+  # change gain values for WFS corrections
+  def on_M1_gain_value_changed
+    msg_cmd(@wfsock, "m1_gain", @m1_gain.value)
+  end
+
+  def on_M2_gain_value_changed
+    msg_cmd(@wfsock, "m2_gain", @m2_gain.value)
+  end
+
+  # grab latest image and centroid it
+  def on_GetImage_clicked
+    @continuous.set_sensitive(false)
+    @getimage.set_sensitive(false)
+    Thread.new {
+      grab_image
+      @continuous.set_sensitive(true)
+      @getimage.set_sensitive(true)
+    }
+  end
+
+  # continuously grab latest frame, analyze, and send requested corrections
+  def on_Continuous_toggled
+    if (@continuous.active?)
+      @getimage.set_sensitive(false)
+      @running = true
+      @continuous.child.set_text("STOP Continuous WFS")
+      t = Thread.new {
+        while @running do
+          got_image = grab_image
+          if got_image
+            report("Applying Corrections.")
+            if @focus.active?
+              focus = msg_get(@wfsock, 'focus_um').to_f
+              if focus < 50.0 && !@turbo.active?
+                msg_cmd(@wfsock, "corr_focus", nil)
+              else
+                report("Focus error too large.")
+              end
+            end
+            if @coma.active?
+              msg_cmd(@wfsock, "corr_coma", nil)
+            end
+            if @primary.active?
+              msg_cmd(@wfsock, "corr_primary", nil)
+            end
+          end
+          report("Waiting for next image....")
+          sleep(2)
+        end
+        report("Stopped Continuous WFS.")
+      }
+    else
+      @running = false
+      @getimage.set_sensitive(true)
+      @continuous.child.set_text("START Continuous WFS")
+    end
+  end
+         
+end
+
+# get the ball rolling!
+Gtk.init
+MainWindow.new()
+Gtk.main

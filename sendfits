@@ -1,0 +1,9 @@
+#!/bin/sh
+#
+
+ export WFS=.:9876
+
+ echo "1 image 529920" | cat - /home/john/g1.1041.fits | nc clark 9876
+
+ msgget WFS filename
+ msgget WFS filetime

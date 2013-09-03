@@ -1,0 +1,188 @@
+/* PMAC States
+ */
+
+#define SCALE		(96*32)
+
+#define MoveTimer	Timer1
+#define TimeTimer	Timer2
+#define BrakTimer	Timer3
+
+
+#define SetError(err)		Error==err  \n Dwell 0
+#define DecDone			Done==Done-1\n Dwell 0
+
+#define SetRunning(r)		Running=1\n Dwell 0
+
+/* Brake Commands
+ */
+
+#define ReleaseBrak(Brak)				   		\n\
+				BrakTimer = BrakTimeOut  		\n\
+				Brak##BrakSave == Brak##Brake		\n\
+				Dwell 0 		   		\n\
+				if ( Brak##Brake = 0 ) 	   		\n\
+					Brak##Brake  == 1   		\n\
+					Dwell 250	   		\n\
+				endif
+#define RestoreBrak(Brak)	if ( Brak##BrakSave = 0 )	   	\n\
+					Dwell 1000	   		\n\
+				endif			   		\n\
+				Brak##Brake == Brak##BrakSave\n\
+				Dwell 0
+
+#define SetBrake(Brak)		Dwell 1000 \n Brak##Brake == 0 \n Dwell 0
+
+#define PrgError(err)					\n\
+				SetError(err)		\n\
+				call ErrorProgram
+
+#define PLCError(err)					\n\
+				RecTimer 		\n\
+				Error=err		\n\
+				MCheck=0		\n\
+				TCheck=0		\n\
+				CCheck=0		\n\
+				FCheck=0		\n\
+				Running=0		\n\
+
+#define	ChekHome(Axis)	if ( Axis##Homed = 0 ) 			\n\
+				PrgError(ErrNotHomed)		\n\
+			endif					\n\
+
+#define SetTimer	MoveTimer=0 \n MoveTime = 0 
+#define RecTimer	MoveTime=MoveTimer*-0.000442
+
+#define NotInPosition(Axis)  Abs(Axis##Actual - Axis##Target) > Axis##TolScale
+
+#define PMACScale(Axis)	(SCALE * Axis##Scale)
+
+#define AxisPos(Axis)	(Axis##Actual + Axis##Bias) / PMACScale(Axis)
+
+#define WaitForInPosition(Axis)  Axis##TolScale = Axis##Tol * PMACScale(Axis)  		\n\
+			    Axis##iTol = Axis##Tol * Axis##Scale * 16			\n\
+			    PosCount = 0                        			\n\
+                            while ( PosCount < 5 )              			\n\
+                                PosCount = PosCount + 1         			\n\
+                                if  ( NotInPosition(Axis) )          			\n\
+                                    PosCount = 0                			\n\
+                                endif                           			\n\
+                            endwhile
+
+#define ChekEStop	if ( EStop = 0 ) 			\n\
+			    PrgError(ErrEStop)			\n\
+			endif
+
+#define ChekServoPower	if ( EncoderPower = 0 ) 		\n\
+			    PrgError(ErrServoPower)		\n\
+			endif
+
+#define ChekEncodPower	if ( ServoPower = 0 ) 			\n\
+			    PrgError(ErrEncoderPower)		\n\
+			endif
+
+#define ChekChecks(Axis)				\n\
+			ChekEStop			\n\
+			ChekServoPower			\n\
+			ChekEncodPower			\n\
+			BrakeOveride = 0		\n\
+			Axis##Check  = 1
+
+#define ProgramInit(Axis)	Clear				\n\
+				Linear Abs			\n\
+				ChekChecks(Axis)		\n\
+     				ChekHome(Axis)			\n\
+				MoveTiming(Axis)		\n\
+				SetTimer
+
+#define MoveTiming(Axis)					\n\
+  	Axis##iFlagAddr=Axis##iFlagAddr & $FDFFFF		\n\
+	FRAX(Axis##AxisLetter)					\n\
+	F   (Axis##FeedRate)					\n\
+	TA  (Axis##AccTime)					\n\
+	TS  (Axis##AccSCur)
+ 
+#define ProgramDone(Axis)	Dwell 0				\n\
+				RecTimer			\n\
+ 				DecDone
+
+#define ChekDesired(Axis)					\n\
+	if ( Axis##Desired < Axis##PLimPos )			\n\
+		PrgError(ErrMoveRange)				\n\
+	endif							\n\
+	if ( Axis##Desired > Axis##MLimPos )			\n\
+		PrgError(ErrMoveRange)				\n\
+	endif
+
+#define Move(Axis, Here)	Axis##AxisLetter(Here)
+
+#define HHomeFlag	0
+#define MLimitHomeFlag	1
+#define PLimitHomeFlag	2
+
+#define Home(Axis)	home:Axis##Motor
+
+#define PLimitFlip	 1
+#define MLimitFlip	-1
+
+#define HomeTiming(Axis)				\n\
+    Axis##iHomeMaxAcc=Axis##iMaxAcc			\n\
+    Axis##iHomeAccTime=Axis##AccTime			\n\
+    Axis##iHomeAccSCur=Axis##AccSCur
+
+#define HomeInit(Axis)					\n\
+    Inc							\n\
+    ChekChecks(Axis)					\n\
+    Axis##Homed  = 0					\n\
+    ReleaseBrak(Axis)					\n\
+    Axis##MLimPos=0					\n\
+    Axis##PLimPos=0					\n\
+    MoveTiming(Axis)					\n\
+    HomeTiming(Axis)
+
+#define LimitJog(Axis, Limit) Axis##LimNudge*Axis##AxisFlip*Limit##LimitFlip
+
+#define HomeToLimit(Axis, Limit)				\n\
+    if ( Axis##Limit##LimBit = 1 ) 				\n\
+	Move(Axis, LimitJog(Axis, Limit))			\n\
+	WaitForInPosition(Axis)					\n\
+								\n\
+      	if ( Axis##Limit##LimBit = 1 ) 				\n\
+		PrgError(ErrLimitAtHome)			\n\
+	endif							\n\
+    endif							\n\
+								\n\
+  Axis##iHomeTrig=Axis##Limit##LimitHomeTrig			\n\
+  Axis##iHomeFlag=Limit##LimitHomeFlag				\n\
+  Axis##iHomeSpeed=						\
+  	Axis##Scale						\
+      * Axis##HomeSpeed						\
+      * Limit##LimitFlip					\
+      / 1000							\
+      * -1							\n\
+  Axis##iHomeOffset=						\
+        Axis##LimNudge						\
+      * Limit##LimitFlip					\
+      * Axis##Scale*16 						\n\
+  Axis##iFlagAddr=Axis##iFlagAddr | $020000			\n\
+  Home(Axis)							\n\
+  Axis##iFlagAddr=Axis##iFlagAddr & $FDFFFF  			\n\
+  Axis##Limit##LimPos = Axis##AxisPosCapture / Axis##Scale	\n\
+  
+
+#define HomeToFlags(Axis)						\n\
+  Axis##iHomeTrig=Axis##HomeFlagTrig					\n\
+  Axis##iHomeFlag=Axis##HomeAgainst					\n\
+  Axis##iHomeSpeed=							\
+  	Axis##Scale							\
+      *	Axis##HomeSpeed*Axis##HomeDir/1000				\n\
+  Axis##iHomeOffset=Axis##HomeOff * Axis##Scale*16			\n\
+  Home(Axis)								\n\
+  Axis##HomePos =  (Axis##AxisPosCapture / Axis##Scale) + Axis##HomeOff	\n\
+  Axis##MLimPos = -(Axis##HomePos - Axis##MLimPos) 			\n\
+  Axis##PLimPos = -(Axis##HomePos - Axis##PLimPos)
+
+
+#define HomeDone(Axis)							\n\
+  SetBrake(Axis)							\n\
+  Axis##Homed=1								\n\
+  DecDone

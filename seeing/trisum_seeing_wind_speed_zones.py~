@@ -1,0 +1,186 @@
+#!/usr/bin/env python
+#===============================================================================
+#
+# Python Numpy/Scipy program for analyzing MMTO WFS seeing data.
+#
+#===============================================================================
+
+import numpy as np
+import matplotlib.cm as cm
+import matplotlib.pyplot as plt
+import scipy.stats as stats
+import MySQLdb
+import math
+
+params = {'axes.labelsize': 14,
+          'axes.fontsize' : 14,
+          'axes.set_aspect': 14,
+          'text.fontsize': 12,
+          'legend.fontsize': 14,
+          'xtick.labelsize': 14,
+          'ytick.labelsize': 14}
+plt.rcParams.update(params)
+
+plt.rcParams['figure.figsize'] = 10, 8
+
+# Date for beginning for WFS Data
+# t1 = "2003-03-20"
+
+# Date for beginng of wind data from any sensor.
+t1 = "2012-05-01"
+
+# Date for starting of temptrax1 background log.
+# t1 = "2006-04-18"
+
+# End of study, remains the same...
+t2 = "2012-09-01"
+
+wind_low = []
+wind_medium = []
+wind_high = []
+wind_all = []
+
+# Get the MySQL data.
+#
+# Reference:
+# http://mysql-python.sourceforge.net/MySQLdb.html
+db=MySQLdb.connect(user="mmtstaff",passwd="multiple",db="mmtlogs")
+
+# Read in data
+c=db.cursor()
+
+# Execute the SQL command to get the seeing data.
+# c.execute("""SELECT `timestamp`, `see_zenith_as` FROM `wfs_seeing_log` WHERE timestamp > %s AND timestamp < %s AND (`mode` = "F5" OR `mode` = "F9") ORDER BY `wfs_seeing_log`.`timestamp` ASC""", (t1, t2))
+c.execute("""SELECT `timestamp`, `see_zenith_as`, `mode`, MONTH(`timestamp`) FROM `wfs_seeing_log` WHERE timestamp > %s AND timestamp < %s ORDER BY `wfs_seeing_log`.`timestamp` ASC""", (t1, t2))
+
+# Fetch all the rows in a list of lists.
+results = c.fetchall()
+
+# A counter of the number of rows returned from the MySQL database.
+count = 0
+
+for row in results:
+    count += 1
+    timestamp = row[0]
+    see_zenith_as = row[1]
+    wfs_mode = row[2]
+    month = row[3]
+    
+    print "row=%s" % (count,)
+
+    # c.execute("""SELECT timestamp, (cell_frontplate_C - cell_chamber_ambient_C), (cell_chamber_ambient_C - cell_outside_ambient_C) from cell_e_series_background_log WHERE timestamp > %s AND timestamp <= ADDTIME(%s, '00:05:00') ORDER BY `timestamp` ASC LIMIT 1""", (timestamp,timestamp))
+    c.execute("""SELECT `timestamp`, `ds_wind_avg_speed` FROM `mount_background_log` WHERE timestamp > %s AND timestamp <= ADDTIME(%s, '00:01:30') ORDER BY `timestamp` ASC LIMIT 1""", (timestamp,timestamp))
+    
+    results2 = c.fetchall()
+    
+    
+    for row2 in results2:
+        # Temperature difference depends on the mode being used.
+        # 
+        val_param1 = row2[1]  # ds_wind_avg_speed
+        
+        # print "val_param1=%s" % (val_param1,)
+        try:
+            max_x = 100.0
+            min_x = 0.0
+            max_y = 5.0
+            min_y = 0.2
+            
+            for row2 in results2:
+                # 
+                val_param1 = row2[1]  # `ds_wind_avg_speed
+                try:
+                    # Checking that numbers are floats.
+                    if float(val_param1):                
+                        if val_param1 >= min_x:
+                            if val_param1 <= max_x:
+                                if see_zenith_as >= min_y:
+                                    if see_zenith_as <= max_y:
+                                        wind_all.append(see_zenith_as)
+                                        print "Count %s, Adding %s" % (count, val_param1)
+                                        if val_param1 < 2.0:
+                                            wind_low.append(see_zenith_as)
+                                        elif val_param1 < 10.0:
+                                            wind_medium.append(see_zenith_as)
+                                        else:
+                                            wind_high.append(see_zenith_as)
+                                            
+                                        
+                except:
+                    print "Error: Bad data"    
+        except:
+            print "Error: Data out of range."
+
+
+title_str = """Seeing: %s to %s""" % (t1, t2)
+xlabel_str = 'Wind Speed (meters/second)'
+ylabel_str = 'Seeing (Arc-seconds, Corrected to Zenith)'
+
+# disconnect from server
+db.close()
+
+np1 = np.array(wind_low)
+np2 = np.array(wind_medium)
+np3 = np.array(wind_high)
+np4 = np.array(wind_all)
+
+print "Size np1 = %s" % (len(wind_low))
+print "Median np1 =  %s" % (np.ma.extras.median(np1))
+print "Mean np1 =  %s" % (np1.mean())
+print "Size np2 = %s" % (len(wind_medium))
+print "Median np2 =  %s" % (np.ma.extras.median(np2))
+print "Mean np2 =  %s" % (np2.mean())
+print "Size np3 = %s" % (len(wind_high))
+print "Median np3 =  %s" % (np.ma.extras.median(np3))
+print "Mean np3 =  %s" % (np3.mean())
+print "Size np4 = %s" % (len(wind_all))
+print "Median np4 =  %s" % (np.ma.extras.median(np4))
+print "Mean np4 =  %s" % (np4.mean())
+
+txt =  "Low Wind (<2 m/s) Statistics:\n"
+txt += "  Samples = %s\n" % (len(wind_low))
+txt += "  Median =  %.2f arc-sec\n" % (np.ma.extras.median(np1))
+txt += "------------------\n"
+txt +=  "Medium Wind (2 - 10 m/s) Statistics:\n"
+txt += "  Samples = %s\n" % (len(wind_medium))
+txt += "  Median =  %.2f arc-sec\n" % (np.ma.extras.median(np2))
+txt += "------------------\n"
+txt +=  "High Wind (>10 m/s) Statistics:\n"
+txt += "  Samples = %s\n" % (len(wind_high))
+txt += "  Median =  %.2f arc-sec\n" % (np.ma.extras.median(np3))
+txt += "------------------\n"
+txt +=  "All Wind Statistics:\n"
+txt += "  Samples = %s\n" % (len(wind_all))
+txt += "  Median =  %.2f arc-sec" % (np.ma.extras.median(np4))
+
+title_str = """Seeing Histogram: %s to %s""" % (t1, t2)
+xlabel_str = 'Seeing (Arc-seconds, Corrected to Zenith)'
+ylabel_str = 'Frequency'
+bins_x = 40
+
+plt.hist( [np1, np2, np3, np4 ], bins_x,  label=['Low Wind', 'Medium Wind', 'High Wind', 'All Wind'])
+plt.legend()
+
+
+plt.text(1.5, 150, txt,
+        horizontalalignment='left',
+        verticalalignment='top')
+
+plt.title(title_str, fontsize=18)
+plt.xlabel(xlabel_str, fontsize=14)
+plt.ylabel(ylabel_str, fontsize=14)
+plt.grid(True)
+
+plt.axis('tight')
+
+#gray = True
+#if gray:
+#    plt.cm.set_cmap(plt.cm.gray}
+  
+show = True
+
+if show:
+    plt.show()
+else: 
+    plt.savefig("trisum_seeing_wind_speed_zones.png");
+

@@ -1,0 +1,288 @@
+<?xml version="1.0"?>
+<!--*- mode: xml -*-->
+<interface>
+  <object class="GtkAdjustment" id="adjustment1">
+    <property name="upper">127</property>
+    <property name="lower">1</property>
+    <property name="page_increment">10</property>
+    <property name="step_increment">1</property>
+    <property name="page_size">0</property>
+    <property name="value">1</property>
+  </object>
+  <object class="GtkListStore" id="model1">
+    <columns>
+      <column type="gchararray"/>
+    </columns>
+    <data>
+      <row>
+        <col id="0" translatable="yes">Video</col>
+      </row>
+      <row>
+        <col id="0" translatable="yes">1</col>
+      </row>
+      <row>
+        <col id="0" translatable="yes">2</col>
+      </row>
+      <row>
+        <col id="0" translatable="yes">4</col>
+      </row>
+      <row>
+        <col id="0" translatable="yes">8</col>
+      </row>
+      <row>
+        <col id="0" translatable="yes">16</col>
+      </row>
+      <row>
+        <col id="0" translatable="yes">32</col>
+      </row>
+      <row>
+        <col id="0" translatable="yes">64</col>
+      </row>
+      <row>
+        <col id="0" translatable="yes">128</col>
+      </row>
+      <row>
+        <col id="0" translatable="yes">256</col>
+      </row>
+    </data>
+  </object>
+  <object class="GtkUIManager" id="uimanager1">
+    <child>
+      <object class="GtkActionGroup" id="actiongroup1">
+        <child>
+          <object class="GtkAction" id="file1">
+            <property name="name">file1</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkAction" id="restart_stella_server">
+            <property name="stock_id">gtk-refresh</property>
+            <property name="name">restart_stella_server</property>
+            <property name="label" translatable="yes">Restart Stella Server</property>
+            <signal handler="on_restart_stella_server_activate" last_modification_time="Wed, 22 Dec 2004 21:40:49 GMT" name="activate"/>
+          </object>
+        </child>
+        <child>
+          <object class="GtkAction" id="quit1">
+            <property name="name">quit1</property>
+            <signal handler="on_quit1_activate" last_modification_time="Wed, 22 Dec 2004 21:40:49 GMT" name="activate"/>
+          </object>
+        </child>
+        <child>
+          <object class="GtkAction" id="help1">
+            <property name="name">help1</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkAction" id="about1">
+            <property name="name">about1</property>
+            <signal handler="on_about1_activate" last_modification_time="Wed, 22 Dec 2004 21:40:49 GMT" name="activate"/>
+          </object>
+        </child>
+      </object>
+    </child>
+    <ui>
+      <menubar name="menubar1">
+        <menu action="file1">
+          <menuitem action="restart_stella_server"/>
+          <separator/>
+          <menuitem action="quit1"/>
+        </menu>
+        <menu action="help1">
+          <menuitem action="about1"/>
+        </menu>
+      </menubar>
+    </ui>
+  </object>
+  <object class="GtkWindow" id="MainWindow">
+    <property name="visible">True</property>
+    <property name="title" translatable="yes">StellaCam GUI</property>
+    <property name="type">GTK_WINDOW_TOPLEVEL</property>
+    <property name="window_position">GTK_WIN_POS_NONE</property>
+    <property name="modal">False</property>
+    <property name="resizable">False</property>
+    <property name="destroy_with_parent">False</property>
+    <property name="decorated">True</property>
+    <property name="skip_taskbar_hint">False</property>
+    <property name="skip_pager_hint">False</property>
+    <property name="type_hint">GDK_WINDOW_TYPE_HINT_NORMAL</property>
+    <property name="gravity">GDK_GRAVITY_NORTH_WEST</property>
+    <property name="focus_on_map">True</property>
+    <property name="urgency_hint">False</property>
+    <signal handler="on_MainWindow_destroy" last_modification_time="Sat, 01 Jan 2005 01:40:52 GMT" name="destroy"/>
+    <child>
+      <object class="GtkVBox" id="vbox1">
+        <property name="visible">True</property>
+        <property name="homogeneous">False</property>
+        <property name="spacing">0</property>
+        <child>
+          <object class="GtkMenuBar" constructor="uimanager1" id="menubar1">
+            <property name="visible">True</property>
+            <property name="pack_direction">GTK_PACK_DIRECTION_LTR</property>
+            <property name="child_pack_direction">GTK_PACK_DIRECTION_LTR</property>
+          </object>
+          <packing>
+            <property name="padding">0</property>
+            <property name="expand">False</property>
+            <property name="fill">False</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkFrame" id="frame1">
+            <property name="border_width">5</property>
+            <property name="visible">True</property>
+            <property name="label_xalign">0</property>
+            <property name="label_yalign">0.5</property>
+            <property name="shadow_type">GTK_SHADOW_ETCHED_IN</property>
+            <child>
+              <object class="GtkComboBox" id="ExposureMenu">
+                <property name="visible">True</property>
+                <property name="add_tearoffs">False</property>
+                <property name="focus_on_click">True</property>
+                <property name="model">model1</property>
+                <child>
+                  <object class="GtkCellRendererText" id="renderer1"/>
+                  <attributes>
+                    <attribute name="text">0</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+            <child type="label">
+              <object class="GtkLabel" id="exposure">
+                <property name="visible">True</property>
+                <property name="label" translatable="yes">Exposure (frames)</property>
+                <property name="use_underline">False</property>
+                <property name="use_markup">False</property>
+                <property name="justify">GTK_JUSTIFY_LEFT</property>
+                <property name="wrap">False</property>
+                <property name="selectable">False</property>
+                <property name="xalign">0.5</property>
+                <property name="yalign">0.5</property>
+                <property name="xpad">0</property>
+                <property name="ypad">10</property>
+                <property name="ellipsize">PANGO_ELLIPSIZE_NONE</property>
+                <property name="width_chars">-1</property>
+                <property name="single_line_mode">False</property>
+                <property name="angle">0</property>
+              </object>
+            </child>
+          </object>
+          <packing>
+            <property name="padding">0</property>
+            <property name="expand">False</property>
+            <property name="fill">False</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkFrame" id="frame2">
+            <property name="border_width">5</property>
+            <property name="visible">True</property>
+            <property name="label_xalign">0</property>
+            <property name="label_yalign">0.5</property>
+            <property name="shadow_type">GTK_SHADOW_ETCHED_IN</property>
+            <child>
+              <object class="GtkSpinButton" id="Gain">
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="climb_rate">1</property>
+                <property name="digits">0</property>
+                <property name="numeric">False</property>
+                <property name="update_policy">GTK_UPDATE_ALWAYS</property>
+                <property name="snap_to_ticks">False</property>
+                <property name="wrap">False</property>
+                <property name="adjustment">adjustment1</property>
+              </object>
+            </child>
+            <child type="label">
+              <object class="GtkLabel" id="label2">
+                <property name="visible">True</property>
+                <property name="label" translatable="yes">Gain</property>
+                <property name="use_underline">False</property>
+                <property name="use_markup">False</property>
+                <property name="justify">GTK_JUSTIFY_LEFT</property>
+                <property name="wrap">False</property>
+                <property name="selectable">False</property>
+                <property name="xalign">0.5</property>
+                <property name="yalign">0.5</property>
+                <property name="xpad">0</property>
+                <property name="ypad">10</property>
+                <property name="ellipsize">PANGO_ELLIPSIZE_NONE</property>
+                <property name="width_chars">-1</property>
+                <property name="single_line_mode">False</property>
+                <property name="angle">0</property>
+              </object>
+            </child>
+          </object>
+          <packing>
+            <property name="padding">0</property>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkButton" id="Config">
+            <property name="border_width">5</property>
+            <property name="visible">True</property>
+            <property name="can_focus">True</property>
+            <property name="label" translatable="yes">Configure StellaCam</property>
+            <property name="use_underline">True</property>
+            <property name="relief">GTK_RELIEF_NORMAL</property>
+            <property name="focus_on_click">True</property>
+            <signal handler="on_Config_clicked" last_modification_time="Wed, 22 Dec 2004 21:57:34 GMT" name="clicked"/>
+          </object>
+          <packing>
+            <property name="padding">0</property>
+            <property name="expand">False</property>
+            <property name="fill">False</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkButton" id="Ping">
+            <property name="border_width">5</property>
+            <property name="visible">True</property>
+            <property name="can_focus">True</property>
+            <property name="label" translatable="yes">Ping StellaCam</property>
+            <property name="use_underline">True</property>
+            <property name="relief">GTK_RELIEF_NORMAL</property>
+            <property name="focus_on_click">True</property>
+            <signal handler="on_Ping_clicked" last_modification_time="Tue, 28 Dec 2004 19:48:43 GMT" name="clicked"/>
+          </object>
+          <packing>
+            <property name="padding">0</property>
+            <property name="expand">False</property>
+            <property name="fill">False</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkButton" id="Grab">
+            <property name="border_width">5</property>
+            <property name="visible">True</property>
+            <property name="can_focus">True</property>
+            <property name="label" translatable="yes">Grab and Display Image in DS9</property>
+            <property name="use_underline">True</property>
+            <property name="relief">GTK_RELIEF_NORMAL</property>
+            <property name="focus_on_click">True</property>
+            <signal handler="on_Grab_clicked" last_modification_time="Tue, 20 Dec 2005 04:13:40 GMT" name="clicked"/>
+          </object>
+          <packing>
+            <property name="padding">0</property>
+            <property name="expand">False</property>
+            <property name="fill">False</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkStatusbar" id="Status">
+            <property name="visible">True</property>
+            <property name="has_resize_grip">True</property>
+          </object>
+          <packing>
+            <property name="padding">0</property>
+            <property name="expand">False</property>
+            <property name="fill">False</property>
+          </packing>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>

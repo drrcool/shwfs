@@ -1,0 +1,94 @@
+#!/usr/bin/ruby
+
+# this was updated on 11-10-05 after an elcoll run
+
+include Math
+
+zeropoint = Hash.new
+#zeropoint['hecto'] = 13977
+#zeropoint['hecto'] = 13913
+#zeropoint['hecto'] = 13398
+#zeropoint['hecto'] = 13204
+#zeropoint['megacam'] = 12949
+#zeropoint['swirc'] = 8872
+#zeropoint['hecto'] = 12963
+#zeropoint['hecto'] = 13705
+#zeropoint['megacam'] = 13330
+#zeropoint['swirc'] = 9357
+
+#zeropoint['hecto'] = 13929
+#zeropoint['megacam'] = 13216
+#zeropoint['swirc'] = 9082
+
+zeropoint['hecto'] = 13514
+#zeropoint['megacam'] = 12801
+zeropoint['megacam'] = 13398
+zeropoint['swirc'] = 8667
+zeropoint['mmirs'] = 8498
+
+config = case ARGV[0]
+	   when /megacam/i then "megacam"
+	   when /hecto/i then "hecto"
+	   when /swirc/i then "swirc"
+	   when /mmirs/i then "mmirs"
+	   when /f9/i then "f9"
+	   when /f15/i then "f15"
+	 else 
+	   puts "Usage: check_hex <megacam|hecto|swirc|mmirs|f9|f15>"
+	   exit
+	 end
+
+errs = Array.new
+
+file = File.new(ARGV[1])
+
+file.each_line { |line|
+  data = line.split(' ')
+
+  focus = data[5].to_f
+  tiltx = data[1].to_f
+  tilty = data[2].to_f
+  transx = data[3].to_f
+  transy = data[4].to_f
+  temp = data[6].to_f
+  el_deg = data[0].to_f
+  ut = data[7]
+  el = el_deg*PI/180.0
+
+  if config == "f9" 
+    pred_focus  =    484.4 +  649.1*sin(el) +    8.4*cos(el) - 46.7*temp
+    pred_tiltx  =     84.9 +   29.4*sin(el) +  140.1*cos(el)
+    pred_tilty  =     30.4 +  -21.8*sin(el) +   50.3*cos(el)
+    pred_transx =    706.6 +  269.9*sin(el) + -243.6*cos(el)
+    pred_transy =    203.0 +  679.0*sin(el) + 1597.5*cos(el)
+  elsif config == "f15"
+    pred_focus  =    685.7 +  816.2*sin(el) +    7.6*cos(el) - 49*temp
+    pred_tiltx  =    120.0 + -124.8*sin(el) +  279.3*cos(el)
+    pred_tilty  =     96.3 +  -60.5*sin(el) +   94.6*cos(el)
+    pred_transx =   -774.2 +  240.0*sin(el) + -376.3*cos(el)
+    pred_transy =    308.9 +   78.0*sin(el) + 2062.6*cos(el)
+  else
+    pred_focus = zeropoint[config] - 35.3*temp + 1104.4*sin(el) + 110.7*cos(el)
+    pred_tilty = -5.0*sin(el) + 38.4*cos(el) + 0.0*temp + 147.1
+    pred_transx = 188.7*sin(el) - 312.8*cos(el) - 0.0*temp - 947.9
+    pred_transy = -351.5*sin(el) + 1149.9*cos(el) + 0.0*temp + 1663.0
+    pred_tiltx = -95.5*sin(el) + 84.5*cos(el) + 0.0*temp + 323.6
+  end
+
+  focuserr = "%8.2f" % (pred_focus - focus)
+  tiltxerr = "%8.2f" % (pred_tiltx - tiltx)
+  tiltyerr = "%8.2f" % (pred_tilty - tilty)
+  transxerr = "%8.2f" % (pred_transx - transx)
+  transyerr = "%8.2f" % (pred_transy - transy)
+
+  err = "%s %8.2f %8.2f %8.2f %8.2f %8.2f %5.2f %5.2f\n" % [ut, focuserr, tiltxerr, tiltyerr, transxerr, transyerr, el_deg, temp]
+
+  errs.push(err)
+
+}
+
+file.close
+
+errs.each { |err|
+  puts err
+}

@@ -1,0 +1,65 @@
+#!/usr/bin/ruby
+
+require 'socket'
+require 'timeout'
+require '/mmt/admin/srv/tcs_lookup.rb'
+
+# Reads from a crate or mini-server via a socket connection.
+def read_service(service)
+  vals = Hash.new
+  host, port = srv_lookup(service)
+  sock = sockopen(host, port)
+  if sock
+    sock.puts("all")
+    loop {
+      rtn_val = sock.gets
+      # Can get an error on stripping if you don't check for NilClass first.
+      break unless rtn_val
+      # This is the normal exit, i.e., ".EOF" read at end of data.
+      next if rtn_val == ".EOF"
+      rtn_val = rtn_val.strip
+      rtn_val =~ /(\w+)\s+(.*)/
+      if $1 and $2
+	vals[$1] = $2
+      else
+	break
+      end
+    }
+  end
+  sock.close() if sock
+  sock = nil
+  return vals
+end
+
+# open a socket
+def sockopen(host, port)
+  socket = nil
+  status = nil
+  begin
+    timeout(1) {
+      socket = TCPSocket.open(host, port)
+    }
+  rescue Timeout::Error
+    status = "Timeout"
+    return nil
+  rescue Errno::ECONNREFUSED
+    status = "Refusing connection"
+    return nil
+  rescue => why
+    status = "Error: #{why}"
+    return nil
+  end
+  return socket
+end
+
+oss1 = read_service('temptrax')
+oss2 = read_service('temptrax3')
+
+oss_nw_top = oss2['temptrax3_probe10']
+oss_sw_top = oss2['temptrax3_probe11']
+oss_ne_top = oss1['temptrax_probe2']
+oss_se_top = oss1['temptrax_probe3']
+oss_sw_bot = oss2['temptrax3_probe12']
+oss_se_bot = oss1['temptrax_probe4']
+
+print "#{oss_nw_top} #{oss_ne_top} #{oss_sw_top} #{oss_se_top} #{oss_sw_bot} #{oss_se_bot}"

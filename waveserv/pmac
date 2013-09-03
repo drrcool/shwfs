@@ -1,0 +1,17 @@
+#/bin/sh
+# \
+exec tclsh $CYGROOT"$0" ${1+"$@"}
+
+package require pmac 1.0
+
+pmac::init 0
+while { [set n [gets stdin comm]] >= 0 } {
+    if { ![string compare . $comm] } { break }
+
+    foreach line [split [pmac::comm 0 $comm] "\r"] {
+	if { ![string compare "PMAC Comm Error" $line] } {
+	    puts "$line : $comm"
+        } else { puts $line }
+    }
+}
+

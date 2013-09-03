@@ -1,0 +1,2058 @@
+#!/usr/bin/wish
+
+package require Tix
+
+lappend auto_path /data/mmti/tcl
+
+set env(MMTIBIN) /data/mmti/bin
+
+option add *background 	#cccccc
+option add *foreground 	black
+option add *font	default
+
+#package require Memchan
+
+font create default -family Courier -size 12 -weight bold 
+
+#namespace import blt::*
+
+#source /mmt/scripts/msg.tcl
+source /mmt/shwfs/msg2.tcl
+
+set env(WAVESERV) wavefront:3000
+msg_client WAVESERV
+
+package provide try 1.0
+
+proc try { code then } {
+    if { [catch {
+	uplevel $code
+    } error] } {
+	puts stderr $error
+	uplevel $then
+    }
+}
+
+
+# This is a bunch of tcl that is usefull in general applications.
+#
+
+proc nop { x } { }
+
+proc laddset { list args } {
+
+    foreach item $args {
+	if { [lsearch $list $item] == -1 } {
+	    lappend list $item
+	}
+    }
+
+    return $list
+}
+
+set OnExit ""
+
+proc null { args } {
+}
+
+
+rename exit _exit
+proc   exit { { retvalue 0 } } {
+		global	OnExit
+
+	foreach code $OnExit {
+		eval $code
+	}
+	_exit $retvalue
+}
+
+proc onexit { code } {
+		global	OnExit
+
+	lappend OnExit $code
+}
+
+
+proc closewindow { w } {
+		set top [winfo toplevel $w]
+		upvar #0 ${top}-OnCloseWindow OnCloseWindow
+
+
+	if { [info exists OnCloseWindow] } {
+	    foreach code $OnCloseWindow {
+		eval $code
+	    }
+	    unset OnCloseWindow
+	}
+        destroy $top
+}
+
+proc onclosewindow { w code } {
+		set top [winfo toplevel $w]
+		upvar #0 ${top}-OnCloseWindow OnCloseWindow
+
+	lappend OnCloseWindow $code
+}
+
+proc unmapwindow { w } {
+		set top [winfo toplevel $w]
+
+	if { [info exists ${top}-OnUnMapWindow] } {
+		upvar #0 ${top}-OnUnMapWindow OnUnMapWindow
+
+	    foreach code $OnUnMapWindow {
+		eval $code
+	    }
+	}
+	wm withdraw [winfo toplevel $w]
+}
+
+proc onunmapwindow { w code } {
+		set top [winfo toplevel $w]
+		upvar #0 ${top}-OnUnMapWindow OnUnMapWindow
+
+	lappend OnUnMapWindow $code
+}
+
+proc delvalue { w name } {
+	upvar #0 $w V
+
+    if { [catch { unset $V($name) } ] } {
+	return 
+    }
+}
+
+proc getvalue { w name } {
+	upvar #0 $w V
+
+    if { [catch { set value $V($name) } ] } {
+	return 
+    }
+
+    return $value
+}
+
+proc setvalue { w name value } {
+	upvar #0 $w V
+
+    set V($name) $value
+}
+
+proc InFrame { w args } {
+        eval frame $w [lrange $args 0 [expr [llength $args] -2]]
+        eval [lindex $args end]
+        return $w
+}
+
+proc Pack { args } {
+	eval pack $args  -fill both -expand yes
+}
+
+proc Grid { args } {
+	eval grid $args -sticky nsew
+}
+
+proc scrolllist { w args } {
+	frame $w
+	eval listbox  $w.list 					\
+			-yscrollcommand [list "$w.yscroll set"]	\
+			$args
+	scrollbar $w.yscroll -command "$w.list yview"
+
+	grid $w.list $w.yscroll -sticky news
+	grid rowconfigure    $w 0 -weight 1
+
+	return $w
+}
+
+proc ScrollText { w args } {
+	frame $w
+	eval text  $w.text 	-wrap none 		\
+			-yscrollcommand [list "$w.yscroll set"]\
+			-xscrollcommand [list "$w.xscroll set"]\
+			-width  80			\
+			-height 25			\
+			$args
+
+	scrollbar $w.xscroll 				\
+			-command "$w.text xview"	\
+			-orient horizontal
+			
+	scrollbar $w.yscroll -command "$w.text yview"
+
+	grid $w.text $w.yscroll -sticky news
+	grid $w.xscroll         -sticky  ew
+
+	grid rowconfigure    $w 0 -weight 1
+	grid columnconfigure $w 0 -weight 1
+
+	return $w.text
+}
+
+proc Toplevel { w title { geometry {} } } {
+		setvalue $w title $title
+
+	if { $w == "." } {
+	    wm protocol $w WM_DELETE_WINDOW "exit"
+
+	    bind [winfo class .] <Unmap> "unmap \[getvalue $w dialogs]"
+	    bind [winfo class .] <Map>   "remap \[getvalue $w unmapps]"
+	} else {
+	    toplevel $w -class ExtraTop
+	    wm withdraw $w
+	    wm protocol $w WM_DELETE_WINDOW "unmapwindow $w"
+
+	    bind ExtraTop <Unmap> { wm withdraw %W }
+
+	    setvalue . dialogs "[getvalue . dialogs] $w"
+	}
+
+	wm title    $w $title
+	if { [string compare $geometry ""] != 0 } {
+	    wm geometry $w $geometry
+	}
+
+	return $w
+}
+
+proc ToplevelRaise { w } {
+	if { [winfo ismapped $w] == 1 } {
+		raise $w
+	} else {
+		wm deiconify $w
+	}
+}
+
+proc ToplevelToggle { w } {
+	if { [winfo ismapped $w] == 1 } {
+		wm iconify $w
+	} else {
+		wm deiconify $w
+	}
+}
+
+
+proc unmap { windows } {
+	global unmapps
+
+    setvalue . unmapps ""
+
+    foreach w $windows {
+	if { [winfo ismapped $w] == 1 } {
+		wm withdraw $w
+		setvalue . unmapps "[getvalue . unmapps] $w"
+	}
+    }
+}
+
+proc remap { unmapps } {
+    foreach w [getvalue . unmapps] {
+	wm deiconify $w
+    }
+}
+
+# Labeled Entry Thingy
+#
+set EntryValue  0
+set EntryWidget .
+
+
+# Change the case of the first letter of the variable name to lowercase 
+#  to use as the  widget name
+proc entFixWidgetName { w } {
+    set var [lindex [split $w .] end]
+    set wlist [split $w .]
+    set lvar "[string tolower [string range $var 0 0]][string range $var 1 end]"
+    set wlist [lreplace $wlist end end $lvar]
+    set w [join $wlist .]
+}
+
+proc retcopy { name indx op } {
+    upvar $name value
+    global ${name}.buffer
+    set ${name}.buffer $value
+}
+
+proc retentry { w args } { 
+    set var [lindex [split $w .] end]
+    set w [entFixWidgetName $w]
+    global ${w}-varname
+    set ${w}-varname $var
+
+    global $var ${var}.buffer
+ 
+    catch {
+	upvar #0 $var value
+	set ${var}.buffer $value
+    }
+
+    trace variable ${var} w { retcopy }
+    
+    eval entry $w -textvariable ${var}.buffer -justify right $args
+
+    # This forces a trace on the return key
+    #
+    bind $w <Key-Return> {
+	set ${%W-varname} [%W get]
+    }
+    bind $w <FocusOut> {
+
+	upvar #0 ${%W-varname}        val
+	upvar #0 ${%W-varname}.buffer buf
+
+	if { [string compare $val $buf] != 0 } {
+	    %W delete 0 end
+	    %W insert 0 $val
+	}
+    }
+
+    return $w
+}
+
+proc msgentry { server lab w { def 0 } { init {} } { code {} } { timeout {} } { sync {} } args } {
+    set var [lindex [split $w .] end]
+    set w [entFixWidgetName $w]
+
+    msg_variable $server $var $var w $def $init $code $timeout $sync
+
+    label ${w}_l -text $lab -anchor w
+    set predash ""
+    set pstdash ""
+    while { [lindex $args 0] == "-"  } {
+	set args [lrange $args 1 end]
+	set predash "$predash -"
+    }
+    while { [lindex $args 0] == "+"  } {
+	set args [lrange $args 1 end]
+	set pstdash "$pstdash -"
+    }
+    
+    eval retentry $w $args
+
+    return "${w}_l $predash $w $pstdash"
+}
+
+proc msgentry_async { server lab w { def 0 } { init {} } { code {} } { timeout {} } { 
+sync {} } args } {
+    set var [lindex [split $w .] end]
+    set neww [entFixWidgetName $w]
+ 
+    msg_variable $server $var $var w $def $init $code $timeout $sync
+ 
+    label ${neww}_l -text $lab -anchor w
+    set predash ""
+    set pstdash ""
+    while { [lindex $args 0] == "-"  } {
+        set args [lrange $args 1 end]
+        set predash "$predash -"
+    }
+    while { [lindex $args 0] == "+"  } {
+        set args [lrange $args 1 end]
+        set pstdash "$pstdash -"
+    }
+    
+    eval retentry $w $args
+
+    return "${neww}_l $predash $neww $pstdash"
+}
+
+proc labentry { lab w args } {
+    set var [lindex [split $w .] end]
+    set w [entFixWidgetName $w]
+
+    global $var
+
+    label ${w}_l -text $lab -anchor w
+    set predash ""
+    set pstdash ""
+    while { [lindex $args 0] == "-"  } {
+	set args [lrange $args 1 end]
+	set predash "$predash -"
+    }
+    while { [lindex $args 0] == "+"  } {
+	set args [lrange $args 1 end]
+	set pstdash "$pstdash -"
+    }
+    
+    eval entry $w -textvariable $var -justify right $args
+
+    return "${w}_l $predash $w $pstdash"
+}
+
+# Axis Control Window
+#
+set limitcolors "green orange cyan red"
+set troubcolors "red green red"
+
+set Temps {
+        mMTemp  hskT1   pwbTemp plusV12 minuV12 plusV05 vTemp   vLimit  
+        tMTemp  hskT1   
+        cMTemp  hskT1   
+        fMTemp  hskT1   
+        mSTemp  hskV1   
+        tSTemp  hskV2  
+        cSTemp  hskV3   
+        fSTemp  ampTemp 
+}
+
+proc axis_control_sub { w } {
+		global Temps
+		global limitcolors
+
+	msg_subscribe WAVESERV busy  busy  "updatebusy $w.busy"         .2
+	msg_subscribe WAVESERV estop estop "updateestop $w.estop"	.2
+
+	msg_subscribe WAVESERV Brak Brak "brakstat {}"		.2
+
+	msg_subscribe WAVESERV spower spower "updatebit .power.spower red green" 
+	msg_subscribe WAVESERV epower epower "updatebit .power.epower red green" 
+	msg_subscribe WAVESERV ppower ppower "updatebit .power.ppower red green" 
+	msg_subscribe WAVESERV apower apower "updatebit .power.apower red green" 
+	msg_subscribe WAVESERV bpower bpower "updatebit .power.bpower red green" 
+	msg_subscribe WAVESERV fpower fpower "updatebit .power.fpower red green" 
+
+	foreach axis { m t c f } {
+	    foreach value { A C T E } {
+	        msg_subscribe WAVESERV $axis$value $axis$value {vformat "%8.3f"} .2
+	    }
+
+	    msg_subscribe WAVESERV ${axis}Brak ${axis}Brak "brakstat $axis" .2
+
+	    msg_subscribe WAVESERV ${axis}OLop ${axis}OLop \
+		    "updateolop   $w.l${axis}" 				.2
+	    msg_subscribe WAVESERV ${axis}PLimit ${axis}PLimit \
+		    "updateclrbit $w.${axis}PLimit [list $limitcolors]"	.2
+	    msg_subscribe WAVESERV ${axis}MLimit ${axis}MLimit \
+		    "updateclrbit $w.${axis}MLimit [list $limitcolors]"	.2
+
+	    msg_subscribe WAVESERV ${axis}offset ${axis}offset
+	    msg_subscribe WAVESERV ${axis}offxxx ${axis}offxxx
+	}
+
+	foreach temp $Temps {
+	    msg_subscribe WAVESERV $temp $temp {} 1
+	}
+
+	msg_subscribe WAVESERV cpuTemp cpuTemp
+
+	msg_subscribe WAVESERV pA    pA
+	msg_subscribe WAVESERV pT    pT
+	msg_subscribe WAVESERV pLite pLite litestat
+	msg_subscribe WAVESERV servo servo "" 				.2 
+}
+
+proc axis_control { w } {
+
+    Grid [axis_pbox [frame $w.control]] -
+    axis_control_sub $w.control
+
+    return $w
+}
+
+proc axis_pbox { w } {
+
+  Grid												\
+    [label  $w.l -text "WAVESERV" -background yellow] 					 -	\
+    [button $w.abort -text "Abort" -background lightblue -command [list msg_cmd WAVESERV "abort 0"]] - \
+    [button $w.clear -text "Clear" -background lightblue -command [list msg_cmd WAVESERV "clear 0"]] - \
+    [label  $w.busy  -text Idle  -width 8 -relief groove]				 -	\
+    [label  $w.estop -text EStop -relief groove] 					 - 	\
+    [button $w.power -text Power -command power]					 -
+
+  Grid										\
+    [label  $w.sele -text "Select" -justify right -anchor e]		- 	\
+    [button $w.swfs -text WFS     -command selwfs]			-	\
+    [button $w.ssci -text SciCam  -command selsci]			-	\
+    [button $w.home -text Home  -command [list askto . home "Do you want to home the WFS"]]	-	\
+    [button $w.stow -text Stow  -command [list askto . stow "Do you want to stow the WFS"]]	-	\
+    [button $w.cam  -text Camera -command camera]			-
+
+  Grid										\
+    [label  $w.ltarc  -text "Field Angle" -justify right -anchor e]	- -	\
+    [entry  $w.tarc   -textvariable TArc -width 8 -justify right]	-	\
+    [label  $w.larc   -text {"} -anchor w]					\
+    [button $w.tposi  -text Go  -command tposi]					\
+    [checkbutton $w.slew -text Slew -variable slew -command slew] 	-
+
+  Grid										\
+    [label  $w.ltpos -text "Off Axis Pos" -justify right -anchor e]	- -	\
+    [entry  $w.tpos  -textvariable TPos -width 8 -justify right]	-	\
+    [label  $w.tmm   -text mm -anchor w]					\
+    [button $w.trans -text Go -command trans]					\
+    [entry  $w.toff  -textvariable toffset -width 5 -justify right]		\
+    [entry  $w.txxx  -textvariable toffxxx -width 5 -justify right -state disabled]		\
+    [label  $w.lpunt -text Puntino]					-	\
+    [button $w.phome -text PHome -command phome]			-
+
+  Grid										\
+    [label  $w.lmpos  -text "Mirror Pos" -justify right -anchor e]	- -	\
+    [entry  $w.mpos   -textvariable MDeg -width 8 -justify right]	-	\
+    [label  $w.mdeg   -text deg -anchor w]					\
+    [button $w.mirror -text Go -command mirror]					\
+    [entry  $w.moff   -textvariable moffset -width 5 -justify right]		\
+    [entry  $w.mxxx   -textvariable moffxxx -width 5 -justify right -state disabled]		\
+    [button $w.litein -text "Ref Pos" -command callite]			-	\
+    [button $w.liteot -text "Sky Pos" -command xmirror]			-
+
+  Grid										\
+    [label  $w.fmpos  -text "Focus Pos" -justify right -anchor e]	- -	\
+    [entry  $w.fpos   -textvariable FPos -width 8 -justify right]	-	\
+    [label  $w.fmm    -text mm -anchor w]					\
+    [button $w.focus  -text Go -command xfocus]				\
+    [entry  $w.foff   -textvariable foffset -width 5 -justify right]		\
+    [entry  $w.fxxx   -textvariable foffxxx -width 5 -justify right -state disabled]		\
+    [button $w.pw     -text "Plot"   -command axis_PW]			-	\
+    [button $w.mstatus -text "Status" -command "mstatus"]		-
+
+  Grid 								 				  \
+    [entry $w.servo -textvariable servo -state disabled -relief groove -justify right -width 6] - \
+    [button $w.lm -text "Mirror" -command [list axis_TW 1 m]] -	\
+    [button $w.lt -text "Trans"  -command [list axis_TW 2 t]] -	\
+    [button $w.lc -text "Select" -command [list axis_TW 3 c]] -	\
+    [button $w.lf -text "Focus"  -command [list axis_TW 4 f]] -	\
+    [button $w.lp -text "Punt"   -background lightblue]          	 		 -
+
+  Grid   								\
+    [label $w.actual  -text "Actual" -justify right -anchor e]      -	\
+    [entry $w.mA -textvariable mA -justify right -width 8] 	    - 	\
+    [entry $w.tA -textvariable tA -justify right -width 8] 	    - 	\
+    [entry $w.cA -textvariable cA -justify right -width 8] 	    -	\
+    [entry $w.fA -textvariable fA -justify right -width 8] 	    -	\
+    [entry $w.pA -textvariable pA -justify right -width 8]	    -	\
+    x x
+
+  Grid   								\
+    [label $w.command  -text "Commanded" -justify right -anchor e] -  	\
+    [entry $w.mC  -textvariable mC  -justify right -width 8] 	   - 	\
+    [entry $w.tC  -textvariable tC  -justify right -width 8] 	   - 	\
+    [entry $w.cC  -textvariable cC  -justify right -width 8] 	   - 	\
+    [entry $w.fC  -textvariable fC  -justify right -width 8] 	   - 	\
+    x x 								\
+    x x 
+
+  Grid   								\
+    [label $w.machin  -text "Target" -justify right -anchor e] -	\
+    [entry $w.mE -textvariable mT  -justify right -width 8] - 		\
+    [entry $w.tE -textvariable tT  -justify right -width 8] - 		\
+    [entry $w.cE -textvariable cT  -justify right -width 8] - 		\
+    [entry $w.fE -textvariable fT  -justify right -width 8] - 		\
+    [entry $w.pE -textvariable pT  -justify right -width 8] - 		\
+    x x 
+
+  Grid 									\
+    [button $w.brak							\
+	    -textvariable brak -background lightblue			\
+	    -command  "setbrake {}"] -					\
+    [button $w.xbrak							\
+	    -textvariable mbrak -background lightblue			\
+	    -command  "setbrake m"] -					\
+    [button $w.mbrak							\
+	    -textvariable tbrak -background lightblue			\
+	    -command  "setbrake t"] -					\
+    [button $w.fbrak							\
+	    -textvariable cbrak -background lightblue			\
+	    -command  "setbrake c"] -					\
+    [button $w.cbrak							\
+	    -textvariable fbrak -background lightblue			\
+	    -command  "setbrake f"] -					\
+    [button $w.plite							\
+	    -textvariable plite -background lightblue			\
+	    -command  "plite"] -
+
+
+Grid x x 						 	 		\
+    [label $w.mPLimit -text "+L" -width 4 -relief groove]			\
+    [label $w.mMLimit -text "-L" -width 4 -relief groove]			\
+    [label $w.tPLimit -text "+L" -width 4 -relief groove]			\
+    [label $w.tMLimit -text "-L" -width 4 -relief groove]			\
+    [label $w.cPLimit -text "+L" -width 4 -relief groove]			\
+    [label $w.cMLimit -text "-L" -width 4 -relief groove]			\
+    [label $w.fPLimit -text "+L" -width 4 -relief groove]			\
+    [label $w.fMLimit -text "-L" -width 4 -relief groove]			\
+    x x x x x x
+
+Grid 	[label $w.wfstemp -text "Temperatures" -background yellow] 	 - - x	\
+	x x									\
+	[label $w.cputemp -text "CPU" -justify right -anchor e]    	 -	\
+    	[entry $w.cpuTemp -textvariable cpuTemp -justify right -width 8] -
+	
+Grid 	[label $w.tpmotor -text "Motor"] -					\
+    	[entry $w.mMTemp -textvariable mMTemp -justify right -width 8] - 	\
+    	[entry $w.tMTemp -textvariable tMTemp -justify right -width 8] - 	\
+    	[entry $w.cMTemp -textvariable cMTemp -justify right -width 8] - 	\
+    	[entry $w.fMTemp -textvariable fMTemp -justify right -width 8] - 
+Grid 	[label $w.tpstruc -text "Struct"] -					\
+    	[entry $w.mSTemp -textvariable mSTemp -justify right -width 8] - 	\
+    	[entry $w.tSTemp -textvariable tSTemp -justify right -width 8] - 	\
+    	[entry $w.cSTemp -textvariable cSTemp -justify right -width 8] - 	\
+    	[entry $w.fSTemp -textvariable fSTemp -justify right -width 8] - 
+
+	return $w
+}
+
+proc vformat { format name indx op } {
+	upvar $name var
+
+	if { [string compare $var "NaN"] } {
+	    set var [format $format $var]
+	}
+}
+
+proc updatelabel { w list name indx op } {
+	upvar $name var
+
+	if { $var >= [llength $list] } {
+		$w configure -text [lindex $list end]
+	} else {
+		$w configure -text [lindex $list $var]
+	}
+}
+
+proc updateclrbit { w color name indx op } {
+	upvar $name var
+
+	catch { $w configure -background [lindex $color $var] }
+}
+
+proc asktogglepow { power name } {
+	upvar #0 $power pow
+
+    if { $pow } {
+        askto .power "togglepow $power" "Do you want to turn \n$name power OFF"
+    } else {
+        askto .power "togglepow $power" "Do you want to turn \n$name power ON"
+    }
+}
+
+proc togglepow { power } {
+	upvar #0 $power pow
+
+	msg_cmd WAVESERV "$power [expr !$pow]" 13000
+}
+
+proc updatebit { w off on name indx op } {
+	upvar $name var
+
+    if { $var == 0 } {
+	    catch { $w configure -background $off }
+    } else {
+	    catch { $w configure -background $on  }
+    }
+}
+
+proc updateolop { w name indx op } {
+	upvar $name var
+
+	updatebit   $w  green      red     var $indx $op
+}
+proc updateestop { w name indx op } {
+	upvar $name var
+
+	updatelabel $w {"EStop " "OK    "}  var $indx $op
+	updatebit   $w red  green  var $indx $op
+}
+
+proc updatebusy { w name indx op } {
+	upvar $name var
+
+	updatelabel $w {"Idle  "   "Busy  "} var $indx $op
+	updatebit   $w green  red  var $indx $op
+}
+
+proc setbrake { axis } {
+    upvar #0 ${axis}brak brak
+
+    if { ![string compare $axis {}] } {
+	set text "BrkAuto"
+    } else {
+	set text Held
+    }
+
+    if { ![string compare $brak $text] } {
+	msg_cmd WAVESERV "${axis}brak 1"
+    } else {
+	msg_cmd WAVESERV "${axis}brak 0"
+    }
+}
+
+proc phome { } { msg_cmd WAVESERV "phome" 30000 }
+proc plite { } {
+	global pLite
+
+    msg_cmd WAVESERV "plite [expr !$pLite]"
+}
+
+proc litestat { name indx mode } {
+	global pLite
+	global plite
+
+    if { $pLite } {
+	set plite "Lite On "
+    } else {
+	set plite "Lite Off"
+    }
+}
+
+proc brakstat { axis name indx mode } {
+	upvar #0 ${axis}Brak	brak
+	upvar #0 ${axis}brak 	text
+
+    if { ![string compare ${axis} {}] } {
+	if { $brak } {
+		set text "BrkMan "
+	} else {
+		set text "BrkAuto"
+	}
+    } else {
+	if { $brak } {
+		set text Free
+	} else {
+		set text Held
+	}
+    }
+}
+
+proc camera { } {
+
+    ToplevelRaise .camera
+}
+
+proc power { } {
+
+    if { [winfo exists .power] } {
+        ToplevelRaise .power
+	return
+    }
+
+    set w [toplevel .power]
+
+  Grid 			 							\
+    [label  $w.lpower -text "WFS Power" -justify right -anchor e -background yellow] 		-	\
+    [button $w.spower -text "Servo"   -command "asktogglepow spower Servo"]	-	\
+    [button $w.epower -text "Encoder" -command "asktogglepow epower Encoder"] 	-	\
+    [button $w.ppower -text "Puntino" -command "asktogglepow ppower Puntino"] 	-
+
+  Grid										\
+    x x										\
+    [button $w.bpower -text "SBIG"    -command "asktogglepow bpower SBIG"]	-	\
+    [button $w.apower -text "Apogee"  -command "asktogglepow apower Apogee"] 	-	\
+    [button $w.fpower -text "StellaCam" -command "asktogglepow fpower StellaCam"]	-
+
+    global spower epower ppower bpower apower fpower
+    set spower $spower
+    set epower $epower
+    set ppower $ppower
+    set apower $apower
+    set bpower $bpower
+    set fpower $fpower
+}
+
+# Axis Tweak Dialogs
+
+set period 5
+
+set RRY 100
+
+proc fraction { name indx op } {
+	upvar $name var
+
+    if { $op == r } {
+	set var [expr $var/0x7FFFFF]
+	vformat "%8.2" var {} $op
+    }
+    if { $op == w } {
+	set var [expr 0x7FFFFF*$var]
+    }
+}
+
+
+set column1 {
+mtcf	 x	x				space0	     	x	x
+mtcf	 O	"Encoder Scale"			${axis}E  	counts/mm	%8.3f
+
+mtcf	 O	"Limit of Pos. Travel"		${axis}MLimPos	mm	%8.3f
+mtcf	 O	"Limit of Neg. Travel"		${axis}PLimPos	mm	%8.3f
+mtcf	 O	"Encoder Home At"		${axis}HomePos	mm	%8.3f
+mtcf	 x	x				space1	     	x	x
+x	 0	"DAC Value"			${axis}DAC	bits	"%d"
+x	 IO	"DAC Bias"			${axis}DACBias	bits	"%d"
+
+g	 O	"dbg1"				dbg1		""	%8.3f
+g	 O	"dbg2"				dbg2		""	%8.3f
+g	 O	"dbg3"				dbg3		""	%8.3f
+
+g	 O	"dbg4"				dbg4		""	%8.0f
+g	 O	"dbg5"				dbg5		""	%8.0f
+g	 O	"dbg6"				dbg6		""	%8.0f
+
+
+c	 IO	"WFS Position"			p70		mm	%8.3f
+c	 IO	"Sci Position"			p71		mm	%8.3f
+
+t	 IO 	"WFS T Offset"			p72		mm	%8.3f
+t	 IO 	"Sci T Offset"			p73		mm	%8.3f
+
+f	 IO 	"WFS F Offset"			p74		mm	%8.3f
+f	 IO 	"Sci F Offset"			p75		mm	%8.3f
+}
+
+set column2 {
+xmfc	x 	x 				space0	   x 		x
+
+mtcf   IO	"Proportional Gain"		i${moto}30 ""		%8.0f
+mtcf   IO	"Derivitive Gain"		i${moto}31 ""		%8.0f
+mtcf   IO	"Velocity Feed Forward"		i${moto}32 ""		%8.0f
+mtcf   IO	"Integral Gain" 		i${moto}33 ""		%8.0f
+mtcf   IO	"Integral Mode" 		i${moto}34 ""		%8.0f
+
+mtcf   IO	"Integration Limit"		i${moto}63 "1/16 count"	%8.0f
+mtcf   IO	"Big Step Limit"		i${moto}67 "1/16 count" %8.0f
+
+mtcf	x 	x 				space1	   x		x
+
+mtcf   IO	"Feed Rate" 			p${moto}05 "mm/sec"	%8.3f
+mtcf   IO	"Time of Acceleration" 		p${moto}06 "msec" 	%8.0f
+mtcf   IO	"Time of S-Curve" 		p${moto}07 "msec"	%8.0f
+mtcf   IO	"Home Speed" 			p${moto}02 "mm/sec"	%8.3f
+mtcf   IO	"Home Offset" 			p${moto}03 "mm"		%8.3f
+mtcf   IO	"Maximum Velocity" 		i${moto}16 "counts/msec"  %8.3f
+mtcf   IO	"Maximum Acceleration" 		i${moto}17 "counts/msec2" %8.3f
+mtcf   IO	"Position Tolerance" 		p${moto}08 "mm" 	%8.3f
+mtcf   IO	"Following Error" 		i${moto}11 "1/16 count"	%8.0f
+mtcf   IO	"Hold Decel Rate" 		i${moto}95 "2^-23msec/servo" %8.0f
+mtcf   IO	"Error Deceleration Rate" 	i${moto}15 "counts/msec2" %8.0f
+x      IO	"Dead Band Factor"		i${moto}64 ""		%8.0f
+x      IO	"Dead Band Size"		i${moto}65 "1/16 counts"	%8.0f
+}
+
+proc axis_TW { label axis } {
+    if { [winfo exists .axis_tweak${axis}] == 0 } {
+	axis_tweak [Toplevel .axis_tweak${axis}			\
+		"$label $axis Axis Tweak" +100+100] $axis
+    }
+    ToplevelRaise .axis_tweak${axis}
+}
+
+array set AxisMap {
+    m	1
+    t	2
+    c	3
+    f	4
+}
+
+proc buildcolumn { column w axis } {
+	global AxisMap
+
+    set moto $AxisMap($axis)
+
+    foreach { axes io name vari units format } $column {
+	if { [string first $axis $axes] == -1 } { continue }
+        if { [string compare $name x] == 0 } 	{
+		 Grid [label $w.${vari}] x x
+		 continue
+	}
+
+	eval set  vname ${vari}
+        global   $vname
+        upvar #0 $vname var
+
+        if { [info exists var] == 0 } { set $vname 0 }
+
+        if { [string first I ${io}] != -1 } {
+		catch {
+	       set val {}
+	       set val [msg_get WAVESERV $vname]
+	    }
+
+	       set $vname $val
+
+	    eval Grid [msgentry WAVESERV $name $w.$vname {} Server {} {} {} -width 8] \
+		  [label $w.lu_$vname -text $units -anchor w] 
+	} else {
+	    eval Grid [labentry         $name $w.$vname -width 8 -state disabled] \
+		  [label $w.lu_$vname -text $units -anchor w] 
+	}
+
+        if { [string first O ${io}] != -1 } {
+	    msg_subscribe WAVESERV $vname $vname "vformat $format" {} 30000 column
+        }
+    }
+}
+
+proc axis_tweak { w axis } {
+
+Grid [InFrame $w.f1 {
+	upvar 	axis	axis
+
+    Grid [InFrame $w.move {
+		upvar 	axis	axis
+
+		global ${axis}_left
+		global ${axis}_right 
+	        global ${axis}brake
+
+	 Grid [button $w.cloop -text "Close Loop" -command [list cloop $axis]]		\
+	      [button $w.abort -text "Abort"      -command [list msg_cmd WAVESERV "abort"]]	\
+	      [button $w.home  -text "Home"       -command [list msg_cmd WAVESERV ${axis}home 60000]]
+
+	 if { ![string compare $axis c] } {
+	     set ctags [button $w.ctags -text "Tag Up"     -command [list msg_cmd WAVESERV "ctags"]]
+	 } else {
+	     set ctags {}
+	 }
+
+	 eval Grid [button $w.${axis}brak			\
+		    -textvariable ${axis}brak			\
+		    -command  "setbrake $axis"]			\
+		    $ctags
+
+	set movelab "mm"
+
+	eval Grid [button $w.goleft  -text "Move To" -command [list moveto $axis left]] 	\
+		  [entry $w.left  -justify right -width 8 -textvariable ${axis}_left]   \
+		  [label $w.rul -text $movelab -anchor w]
+
+	eval Grid [button $w.goright -text "Move To" -command [list moveto $axis right]] 	\
+		  [entry $w.right -justify right -width 8 -textvariable ${axis}_right]  \
+		  [label $w.lul -text $movelab -anchor w]
+
+	eval Grid [labentry "Sample Period"  $w.period -width 8]				\
+		  [label $w.sul -text "* 442 usec" -anchor w]
+
+	}] - -
+
+    global column1
+    buildcolumn $column1 $w $axis
+}] \
+[InFrame $w.f2 {
+	global column2
+	upvar  axis	axis
+
+    buildcolumn $column2 $w $axis
+}]
+
+    catch { msg_waitgroup WAVESERV column }
+
+    return $w
+}
+
+proc moveto { axis dir } {
+	upvar ${axis}_$dir here
+
+    if { ![string compare $here ""] } { return }
+
+    msg_cmd WAVESERV "${axis}move $here" 90000
+}
+
+# Axis Plotting Window
+#
+
+#source "/data/mmti/src/mmtitcl/starbase.tcl"
+#source "/data/mmti/src/mmtitcl/filemenu.tcl"
+
+proc nop { code } { }
+
+set n 0
+foreach axis { m t c f } {
+    foreach type { A C } {
+	global bit${axis}${type}
+	set bit${axis}${type} [expr 1 << $n]
+
+	incr n
+    }
+}
+set bitmD	[expr 1 <<  8]
+set bittD	[expr 1 <<  9]
+set bitcD	[expr 1 << 10]
+set bitfD	[expr 1 << 11]
+
+
+proc axis_PW { } {
+    if { [winfo exists .axis_plot] == 0 } {
+	axis_plot [Toplevel .axis_plot "Axis Motion Plot" +100+100]
+    }
+    ToplevelRaise .axis_plot
+}
+
+
+proc axis_plot_print { filename } {
+	global graph
+
+
+	switch -glob -- $filename {
+	    /* -
+	    .* {
+		$graph configure -title "Axis Motion Profile - $filename [clock format [clock seconds]]"
+		$graph postscript output $filename
+		$graph configure -title "Axis Motion Profile"
+	    }
+	    default {
+		$graph postscript output ./plotout.ps
+		exec lpr -P$filename < ./plotout.ps
+	    }
+	}
+}
+
+proc axis_plot { w } {
+	global axis_data graph
+
+    set filemenu [filemenu [Menubar  $w] NullFileClass]
+    menu $w.menubar.optsmenu -tearoff 0
+
+    $w.menubar add cascade -menu $w.menubar.optsmenu -label "Options"
+    $w.menubar.optsmenu add command -label "Configure ..."		\
+	-command { axis_plot_OP }
+
+    setvalue $filemenu open  { axis_plot_open  }
+    setvalue $filemenu save  { axis_plot_save  }
+    setvalue $filemenu print { axis_plot_print }
+    setvalue $filemenu types {
+        { "Axis motion data"  .xyztp 		}
+        { "All files"                     * 	}
+    }
+
+	set graph [graph $w.plot -title "Axis Motion Profile"	\
+			-height 7.25i -width 11.25]
+
+	$graph xaxis configure -title "Time in sec" 	\
+			-tickfont {courier 14 bold}	\
+			-titlefont {courier 14 bold}
+	$graph yaxis configure -title "Position in mm" 	\
+			-tickfont  {courier 14 bold}	\
+			-titlefont {courier 14 bold}
+	$graph y2    configure -title "DAC in volts" 	\
+			-tickfont  {courier 14 bold}	\
+			-titlefont {courier 14 bold}
+
+
+	global period
+	global timebase 
+
+	catch { vector timebase(3000) }
+	set leng [timebase length]
+
+	for { set i 0 } { $i < $leng } { incr i } {
+		set timebase($i) [expr $i * (0.000440 * $period)]
+	}
+
+	    foreach axis 	{ m     t   c     f     } \
+		    color	{ blue  red green black } {
+
+		global v${axis}A v${axis}C v${axis}E v${axis}D
+		global c${axis}
+
+		catch { vector v${axis}A(3000) }
+		catch { vector v${axis}C(3000) }
+		catch { vector v${axis}E(3000) }
+		catch { vector v${axis}D(3000) }
+
+		set v${axis}A(0:[expr $leng-1]) 0
+		set v${axis}C(0:[expr $leng-1]) 0
+		set v${axis}E(0:[expr $leng-1]) 0
+		set v${axis}D(0:[expr $leng-1]) 0
+
+		set c${axis} $color
+	    }
+
+	Blt_ZoomStack $graph
+        bind $graph <ButtonPress-2>   	{ PikMarkers %W %x %y }
+        bind $graph <ButtonRelease-2> 	{ DonMarkers %W %x %y }
+        bind $graph <B2-Motion> 	{ MovMarkers %W %x %y }
+
+	set coords [MakeXCoords 0]
+	$graph marker create line -coords $coords -name "done"
+
+	grid [button $w.acq -text "Acquire Data" -command "axis_gatdat"]		\
+	     [label  $w.spacer1 -width 17]						\
+	     [label  $w.done  -text "Map Done"]						\
+	     [checkbutton $w.done1 -text "" -command "MapEndMove $graph"]	\
+	     [checkbutton $w.mark -text "Map Markers" -command "MapMarkers $graph"]	\
+	     [entry $w.length0 -textvariable length0 -justify right -width 10] 		\
+	     [entry $w.length1 -textvariable length1 -justify right -width 10] 		\
+	     [label  $w.spacer2 -width 10]						\
+		-sticky news
+
+	Grid $graph - - - - - - - -
+}
+
+set Markers(mapped)	0
+set Markers(mark0,move) 0
+set Markers(mark1,move) 0
+set Markers(mark2,move) 0
+set Markers(mark3,move) 0
+set Markers(X)		0
+set Markers(done)	0
+
+proc UpdateLengths { } {
+	global length0
+	global length1
+	global Markers
+
+	set length0 [format "%7.3f" [expr abs($Markers(mark0,X) - $Markers(mark1,X))]]
+	set length1 [format "%7.3f" [expr abs($Markers(mark2,Y) - $Markers(mark3,Y))]]
+}
+
+proc DonMarkers { graph x y } {
+		global Markers
+	
+	set Markers(mark0,move) 0
+	set Markers(mark1,move) 0
+}
+
+proc PikMarkers { graph x y } {
+		global Markers
+
+    if { $Markers(mapped) == 1 } {
+	GetGraphCoords $graph $x $y X Y
+	set Markers(X) $X
+	set Markers(Y) $Y
+
+	GetWindoCoords $graph $Markers(mark0,X) 0 X Y
+	if { abs($X-$x) < 20  } { set Markers(mark0,move) 1
+	} else			{ set Markers(mark0,move) 0 }
+
+	GetWindoCoords $graph $Markers(mark1,X) 0 X Y
+	if { abs($X-$x) < 20  } { set Markers(mark1,move) 1 
+	} else			{ set Markers(mark1,move) 0 }
+
+	GetWindoCoords $graph 0 $Markers(mark2,Y) X Y
+	if { abs($Y-$y) < 20  } { set Markers(mark2,move) 1 
+	} else			{ set Markers(mark2,move) 0 }
+
+	GetWindoCoords $graph 0 $Markers(mark3,Y) X Y
+	if { abs($Y-$y) < 20  } { set Markers(mark3,move) 1 
+	} else			{ set Markers(mark3,move) 0 }
+    }
+}
+
+proc MovMarkers { graph x y } {
+		global Markers
+
+	GetGraphCoords $graph $x $y X Y
+
+	if { $Markers(mark0,move) } {
+	    set Markers(mark0,X) [expr $Markers(mark0,X) + ($X-$Markers(X))]
+	    set coords [MakeXCoords $Markers(mark0,X)]
+	    $graph marker create line -coords $coords -name "mark0"
+	}
+	if { $Markers(mark1,move) } {
+	    set Markers(mark1,X) [expr $Markers(mark1,X) + ($X-$Markers(X))]
+	    set coords [MakeXCoords $Markers(mark1,X)]
+	    $graph marker create line -coords $coords -name "mark1"
+	}
+	if { $Markers(mark2,move) } {
+	    set Markers(mark2,Y) [expr $Markers(mark2,Y) + ($Y-$Markers(Y))]
+	    set coords [MakeYCoords $Markers(mark2,Y)]
+	    $graph marker create line -coords $coords -name "mark2"
+	}
+	if { $Markers(mark3,move) } {
+	    set Markers(mark3,Y) [expr $Markers(mark3,Y) + ($Y-$Markers(Y))]
+	    set coords [MakeYCoords $Markers(mark3,Y)]
+	    $graph marker create line -coords $coords -name "mark3"
+	}
+
+	set Markers(X) $X
+	set Markers(Y) $Y
+	UpdateLengths
+}
+
+
+proc MapEndMove { graph } {
+		global Markers
+
+	if { $Markers(done) == 1 } {
+	    $graph marker delete done
+	    set Markers(done) 0
+	} else {
+	    set Markers(done) 1
+	    set coords [MakeXCoords [msg_cmd WAVESERV "pmac 0 m95"]]
+	    $graph marker create line -coords $coords -name "done"
+	}
+}
+
+proc MapMarkers { graph } {
+		global Markers
+
+	if { $Markers(mapped) == 1 } {
+	    $graph marker delete mark0
+	    $graph marker delete mark1
+	    $graph marker delete mark2
+	    $graph marker delete mark3
+
+	    set Markers(mapped) 0
+	} else {
+	    GetLimits $graph xaxis X0 X1
+	    GetLimits $graph yaxis Y0 Y1
+
+	    set Markers(mark0,X) [expr $X0 + ($X1-$X0)*.10]
+	    set coords [MakeXCoords $Markers(mark0,X)]
+	    $graph marker create line -coords $coords -name "mark0"
+
+	    set Markers(mark1,X) [expr $X1 - ($X1-$X0)*.10]
+	    set coords [MakeXCoords $Markers(mark1,X)]
+	    $graph marker create line -coords $coords -name "mark1"
+
+	    set Markers(mark2,Y) [expr $Y0 + ($Y1-$Y0)*.10]
+	    set coords [MakeYCoords $Markers(mark2,Y)]
+	    $graph marker create line -coords $coords -name "mark2"
+
+	    set Markers(mark3,Y) [expr $Y1 - ($Y1-$Y0)*.10]
+	    set coords [MakeYCoords $Markers(mark3,Y)]
+	    $graph marker create line -coords $coords -name "mark3"
+
+	    set Markers(mapped) 1
+	}
+	UpdateLengths
+}
+
+proc MakeYCoords { y } {
+	return "-Inf $y Inf $y"
+}
+proc MakeXCoords { x } {
+	return "$x Inf $x -Inf"
+}
+
+proc GetWindoCoords { graph x y xret yret } {
+	upvar $xret X
+	upvar $yret Y
+ 
+    set coords [$graph transform $x $y]
+    set X [lindex $coords 0]
+    set Y [lindex $coords 1]
+}
+
+proc GetGraphCoords { graph x y xret yret } {
+	upvar $xret X
+	upvar $yret Y
+ 
+    set coords [$graph invtransform $x $y]
+    set X [lindex $coords 0]
+    set Y [lindex $coords 1]
+}
+
+proc GetLimits { graph axis xret yret } {
+	upvar $xret X
+	upvar $yret Y
+
+    set coords [$graph $axis limits]
+    set X [lindex $coords 0]
+    set Y [lindex $coords 1]
+}
+
+proc BltMarker  { graph x y } {
+	puts "$graph $x $y"
+}
+
+
+proc listbits { axis } {
+	set i20 [msg_cmd WAVESERV "pmac 0 i20"]
+
+	set i20 "0x[string range $i20 2 [expr [string length $i20] - 2]]"
+
+	set ACQ {}
+	foreach vec { mA     mC     tA     tC     cA     cC	fA     fC   
+		      mD     tD     cD     fD } {
+		upvar #0 bit$vec bit
+
+		if { [expr $i20 & $bit] } {
+		     set ACQ "$ACQ $vec"
+		}
+	}
+
+	return $ACQ
+}
+
+proc axis_gatdat { } {
+	global Serving
+	global timebase
+	global graph
+	global Markers
+
+	set pmac 0
+
+	  msg_cmd WAVESERV "pmac $pmac p94=1"
+          if { [msg_cmd WAVESERV "pmac $pmac p94"] == 1 } {
+
+	    set period 	[msg_cmd WAVESERV "pmac   $pmac i19"]
+	    set data   	[join [msg_cmd WAVESERV "gatdat $pmac" 30000]]
+	    set ACQ 	[listbits $pmac]
+
+	    set n 	[expr int([llength $data] / [llength $ACQ])]
+	    timebase length $n
+	    
+	    for { set i 0 } { $i < $n } { incr i } {
+		    set timebase($i) [expr $i * (0.000440 * $period)]
+	    }
+
+	    set command ""
+	    set print ""
+	    foreach vec $ACQ {
+		global v${vec}
+		set command [concat $command "set v${vec}(\$i) \$$vec;"]
+		set print [concat $print "\$$vec;"]
+	    }
+
+	    set i 0
+	    foreach $ACQ $data {
+		if { $i >= $n } { break }
+
+		eval $command
+		incr i
+	    }
+
+	    foreach axis { m t c f } {
+		v${axis}E set [v${axis}C - v${axis}A]
+	    }
+	  }
+
+	  if { $Markers(done) } {
+	      set coords [MakeXCoords [msg_cmd WAVESERV "pmac $pmac m95"]]
+	      $graph marker create line -coords $coords -name "done$pmac"
+	  }
+
+	  msg_cmd WAVESERV "pmac $pmac p94=0"
+}
+
+proc axis_plot_OP { } {
+    if { [winfo exists .axis_plot_options] == 0 } {
+	axis_plot_options [Toplevel .axis_plot_options "Axis Motion Plot Options" +0+0]
+    }
+    ToplevelRaise .axis_plot_options
+}
+
+proc axis_plot_options { w } {
+
+    set pmac 0
+
+	foreach axis { m t c f } {
+		global v${axis}Amapped
+		global v${axis}Cmapped
+		global v${axis}Dmapped
+		global v${axis}Emapped
+
+	    Grid [label      $w.w${axis} -text $axis]		\
+		[checkbutton $w.v${axis}Amapped 			\
+			-command "vmapp $w $axis A"]		\
+		[label 	     $w.w${axis}actual_l -text "Actual "]\
+		[checkbutton $w.v${axis}Cmapped 			\
+			-command "vmapp $w $axis C"]		\
+		[label       $w.w${axis}commanded_l -text "Commanded"]	\
+		[checkbutton $w.v${axis}Dmapped 			\
+			-command "vmapp $w $axis D"]		\
+		[label       $w.w${axis}dac_l -text "DAC"]	\
+		[checkbutton $w.v${axis}Emapped 			\
+			-command "vmapp $w $axis E"]		\
+		[label       $w.w${axis}error_l -text "Error"]	\
+	}
+}
+
+proc vmapp { w axis type } {
+	    global graph
+	    upvar #0 v${axis}${type}mapped mapped
+	    upvar #0 c${axis} color
+
+    switch $type {
+	A { set dash { }	}
+	C { set dash { 2 2  }	}
+	D { set dash { 1 2 3 }	}
+	E { set dash { 3 3 }	}
+    }
+
+    if { $mapped == 1 } {
+      if { ![string compare $type D] } {
+	  set axisside y2
+      } else {
+	  set axisside y
+      }
+      $graph element create v${axis}${type} -xdata timebase -ydata v${axis}${type} \
+		-color $color -symbol none -dashes $dash -mapy $axisside
+    } else {
+	$graph element delete v${axis}${type}
+    }
+}
+
+    set mstatus1 {
+	"Motor Activated"	 "Negative Limit Set" 	"Positive Limit Set" 	"Skip"
+	"Skip" 			"Open Loop" 		"Running Move" 		"Skip"
+	"Dwelling" 		"Data Block Error" 	"Desired Vel is Zero" 	"Abort Deceleration"
+	"Skip"			"Home in Progress" 	"Skip" 			"Skip"
+	"Skip" 			"Skip" 			"Skip" 			"Skip"
+	"Skip" 			"Skip" 			"Skip" 			"Skip"
+    }
+
+    set mstatus2 {
+	"Assigned To CS" 	"Skip" 			"Skip" 			"Skip"
+	"Skip" 			"Skip" 			"Skip" 			"Skip"
+	"Skip" 			"Amp Enabled" 		"Skip" 			"Skip"
+	"Stoped on Limit" 	"Home Complete" 	"Skip" 			"Skip"
+	"Skip" 			"Skip" 			"Skip" 			"Skip"
+	"Amp Fault" 		"Following Error" 	"Following Warning" 	"In Position"
+    }
+
+proc mstatus { } {
+    if { [winfo exists .mstatus] == 0 } {
+	mstatus_box [Toplevel .mstat "Motor/Servo Status" +0+0]
+    }
+    ToplevelRaise .mstat
+}
+
+
+proc checkmstatus { n axis name indx op } {
+
+    upvar #0  mstatus$n mstatus 
+    upvar     $name      status
+
+    set i 0
+    foreach bit $mstatus {
+	if { [string compare $bit Skip] } {
+	    global $axis$n$bit
+
+    	    set c 0x[string index [format %06x $status] [expr $i / 4]]
+    	    set $axis$n$bit	[expr !!($c & (1 << [expr 3 - $i % 4]))]
+	}
+	incr i
+    }
+}
+
+proc mstatus_box { w } {
+	global mstatus
+
+    set row [label $w.space1]
+    foreach axis { X F M C } {
+	global ${axis}status1
+	global ${axis}status2
+
+#    	msg_subscribe WAVESERV ${axis}status1 ${axis}status1 "checkmstatus 1 $axis"
+#    	msg_subscribe WAVESERV ${axis}status2 ${axis}status2 "checkmstatus 2 $axis"
+	set row "$row [label $w.l$axis -text $axis]"
+    }
+    eval grid $row -sticky news
+
+    buildbits 1 $w
+    buildbits 2 $w
+}
+
+proc buildbits { n w } {
+	upvar #0 mstatus$n mstatus 
+
+    set i 0
+    foreach bit $mstatus {
+	if { [string compare $bit Skip] } {
+		set row [label $w.m${n}bit$i -text $bit -justify left -anchor w]
+
+	    foreach axis { X M F C } {
+		global $axis$n$bit
+		set row "$row [checkbutton $w.box$axis$n$i -variable $axis$n$bit]"
+	    }
+	}
+	eval grid $row -sticky news
+	incr i
+    }
+}
+
+set ::milli 0
+
+set Counter	$env(HOME)/.image
+set DataDir	/data/ccd/john/wave
+set MaxData	[expr 2880 * 3 + 1280 * 1024 * 2]
+
+set wfs_dir   /data/ccd/wfs/wfs
+set wfs_bin   1
+set wfs_shm   2001
+
+set wfs_filters {}
+set wfs_bins    { 1 2 3 }
+set wfs_cooler  1
+
+set wfs_fx1   0
+set wfs_fy1   0
+set wfs_fnx 512
+set wfs_fny 512
+
+set wfs_bx1 [expr $wfs_fnx/2 - 50]
+set wfs_by1 [expr $wfs_fny/2 - 50]
+set wfs_bnx 100
+set wfs_bny 100
+
+set wfs_full  0
+set wfs_expunits  sec
+
+
+set sci_dir   /data/ccd/wfs/sci
+set sci_bin   1
+set sci_shm   2002
+
+set sci_filters { U B V R I }
+set sci_bins    { 1 2 3 4 8 }
+set sci_cooler  1
+
+set sci_fx1    0
+set sci_fy1    0
+set sci_fnx 1034
+set sci_fny 1024
+
+set sci_bx1 [expr $sci_fnx/2 - 100]
+set sci_by1 [expr $sci_fny/2 - 100]
+set sci_bnx  200
+set sci_bny  200
+
+set sci_full  0
+set sci_expunits  sec
+
+
+set pix_dir   /data/ccd/wfs/pix
+set pix_bin   1
+set pix_shm   2003
+
+set pix_filters {}
+set pix_bins    { 1 2 4 }
+set pix_cooler  0
+
+set pix_fx1    0
+set pix_fy1    0
+set pix_fnx 1280
+set pix_fny 1024
+
+set pix_bx1  550
+set pix_by1  500
+set pix_bnx  200
+set pix_bny  200
+
+set pix_full  0
+set pix_expunits  msec
+
+
+package provide camclient 1.0
+
+proc copyfits { filename server sock msgid ack size } {
+        set fits [open $::DataDir/$filename.fits w+]
+	fconfigure  $fits -translation binary 
+	fconfigure  $sock -translation binary
+        fcopy $sock $fits -size $size
+	fconfigure  $sock -translation auto 
+        close $fits
+
+	return 1
+}
+
+proc copymemc { c server sock msgid ack size } {
+	fconfigure  $sock -translation binary
+        bob::read [set ::${c}_att] 0 $size $sock
+	fconfigure  $sock -translation auto 
+
+	return 1
+}
+
+proc abort  { c } {
+	upvar #0 ${c}_state state
+	upvar #0 ${c}_mode  mode
+
+    set C [string toupper $c]
+
+    switch $mode {
+      icube -
+      ecube {
+	close [set ::${c}_file]
+	if {  [set ::${c}_cube] != [set ::${c}_ccnt] } {
+	    fits2ds9 {} [set ::${c}_img] 1
+	}
+	set ::${c}_ccnt ::${c}_cube
+      }
+    }
+
+    if { [string compare $mode video] } {
+        msg_cmd WAVE$C abort 10000
+    }
+    set mode abort
+}
+
+proc expose { c type } {
+	upvar #0 ${c}_state state
+	upvar #0 ${c}_exp   expose
+	upvar #0 ${c}_typ   exptype
+	upvar #0 ${c}_img   image
+	upvar #0 ${c}_mode  mode
+
+	upvar #0 ${c}_bin   bin
+	upvar #0 ${c}_x1    x1
+	upvar #0 ${c}_y1    y1
+	upvar #0 ${c}_nx    nx
+	upvar #0 ${c}_ny    ny
+
+    if { [string compare $mode  idle] && [string compare $mode  abort] } { return }
+    if { [string compare $state Idle] } { return }
+    #if { ![checkonaxis $c]    	      } { return }
+
+    set C [string toupper $c]
+
+
+    switch $type { 
+      frame {
+	if { ![string compare [set image [count $c]] {}] }  { return }
+      }
+      video {
+      }
+      ecube -
+      icube {
+      }
+    }
+
+    if { ![string compare $c pix] 
+      && $::pix_gain != $::pix_gainset } {
+        msg_cmd WAVEPIX "param gain $::pix_gain" 20000
+	set ::pix_gainset $::pix_gain
+    }
+    msg_cmd WAVE$C "setbox 0 $x1 $nx $bin $y1 $ny $bin" 10000
+    msg_cmd WAVE$C "expose 0 $exptype $expose" 		10000
+
+    set mode $type
+}
+
+
+proc reexpose { c n exptype expose } {
+	upvar #0 ${c}_mode mode
+	set C [string toupper $c]
+
+
+    switch $mode {
+      abort { msg_cmd WAVE$C abort 10000;  return }
+      frame { return }
+      icube -
+      ecube {
+	incr ::${c}_ccnt -1
+	if { ![set ::${c}_ccnt] } {
+	     
+	}
+      }
+    }
+
+    msg_cmd WAVE$C "expose 0 $exptype $expose" 10000
+}
+
+set  statx {}
+proc state { c name indx op } {
+
+	global DataDir MaxData
+	upvar    $name     state
+	upvar #0 ${c}_img  img
+	upvar #0 ${c}_mode mode
+
+	set C [string toupper $c]
+
+  if { ![string compare $mode abort] } {
+	msg_cmd WAVE$C abort
+	set mode idle
+  } elseif { [string compare $mode idle] } {
+
+    if { ![string compare   $state Idle] } {
+	set state Idle
+	set mode  idle
+    }
+
+    if { ![string compare -length 8 $state Exposing] } {
+	upvar #0 ${c}_timer cnt
+	set state "[lindex $state 0] [format %4d $cnt]"
+    }
+    if { ![string compare $state Exposed] } {
+	switch $mode {
+	  video - 
+	  frame {
+	    if { [catch { msg_cmd WAVE$C readout }] } {
+		msg_cmd WAVE$C abort
+		set mode idle
+	    }
+	  }
+	}
+    }
+
+    if { ![string compare $state Read] } {
+	switch $mode {
+	  icube -
+	  ecube -
+	  video {
+	    upvar #0 ${c}_exp   expose
+	    upvar #0 ${c}_typ   exptype
+
+	    after 1 "reexpose $c 0 $exptype $expose"
+	  }
+	  frame {
+            if { [catch { msg_cmd  WAVE$C "fits 0 $::MaxData" 20000 sync no "copyfits $img" }] } {
+		msg_cmd WAVE$C abort
+		set mode idle
+	    }
+	    msg_cmd WAVE$C idle
+
+	    fits2ds9 1 $img
+	  }
+	}
+    }
+  }
+
+    if { [string compare $state Idle] } {
+	$::w.$c.expose configure -state disabled
+	$::w.$c.live   configure -state disabled
+	$::w.$c.abort  configure -state normal
+    } else {
+	$::w.$c.expose configure -state normal
+	$::w.$c.live   configure -state normal
+	$::w.$c.abort  configure -state disabled
+    }
+
+    set ::statx $state
+}
+
+proc count { c } {
+    incr ::${c}_cnt
+
+    
+    set file [open $::Counter w]
+
+    set save {}
+    foreach cam { wfs sci pix } {
+      foreach val { dir pre cnt exp typ bin bx1 by1 bnx bny filters bins cooler shm } {
+	lappend save "set ${cam}_$val [list [set ::${cam}_$val]]"
+      }
+      lappend save {}
+    }
+    puts $file "# Generic camera user interface config"
+    puts $file "#"
+    puts $file [join $save "\n"]
+    
+    close $file
+
+    set datadir [clock format [clock seconds] -format "%Y.%m%d" -gmt 1]
+    set filename "[set ::${c}_pre][format %04d [set ::${c}_cnt]]"
+
+
+    if { [file exists $::DataDir/$filename.fits] } {
+	set w    .camera
+	set mess "The image file: $filename exists\nDo you really want to overwrite it?"
+
+	set reply [tk_messageBox -parent $w -default no -icon warning -message $mess -type yesno]
+
+        if { ![string compare $reply no] } {
+	    return {}
+        }
+    }
+
+    return $filename
+}
+
+proc checkonaxis { c } {
+    set reply 1
+
+catch {
+    if { ![string compare $c wfs] && $::cA > -115       \
+      || ![string compare $c pix] && $::cA > -115 	\
+      || ![string compare $c sci] && $::cA <   15 } {
+        set w .camera
+	set mess "The $c Camera not on axis\nDo you really want an exposure?"
+
+        if { ![string compare 									\
+		[tk_messageBox -parent $w -default no -icon warning -message $mess -type yesno]	\
+		no] } {
+	    set reply 0
+        }
+    }
+}
+
+    return $reply
+}
+proc fits2ds9 { frame fits { load 0 } { key {} } { siz {} } } {
+    switch $::env(USER) {
+	wave    { set xpatarget wavefront-ds9 }
+	john    { set xpatarget ds9 }
+	default { set xpatarget mc9 }
+    }
+
+    if { [string compare $frame {}] } {
+	    catch { exec xpaset -p $xpatarget frame $frame }
+    }
+
+    if { [string compare $key {}] } {
+	if { $load } {
+	    exec xpaset -p $xpatarget shm key $key $siz $fits
+	} else {
+	    exec xpaset -p $xpatarget update &
+	}
+    } else {
+	catch { exec xpaset -p $xpatarget file $::DataDir/$fits.fits & }
+    }
+}
+
+set pix_exp     35
+set pix_gain    50
+set pix_gainset  0
+
+set w [Toplevel .camera "Wavefront Cameras" -585+0]
+#ToplevelRaise   .camera
+
+
+proc drop { name var args } {
+	eval tk_optionMenu $name $var [join $args]
+	return $name
+}
+
+proc cooler { c onoff } { 
+	set C [string toupper $c]
+
+    msg_cmd WAVE$C "cooler $onoff"
+}
+
+proc setpoint { cam name indx op } {
+	upvar $name setp
+
+  catch {
+    if { $setp == -20 } {
+	.camera.${cam}.cool1 configure -background "green"
+    } else {
+	.camera.${cam}.cool1 configure -background "lightblue"
+    }
+  }
+}
+
+proc exptype { c } {
+    if { ![string compare light [set ::${c}_typ]] } {
+	set ::${c}_typ dark
+    } else {
+	set ::${c}_typ light
+    }
+}
+
+proc camerabox { w Cam filter bin cool } {
+	set c [string tolower $Cam]
+	set w [frame $w.$c]
+
+  Grid	[label  $w.camera -text "$Cam Camera" -background yellow] -	\
+	[label  $w.state  -textvariable ${c}_state -width 13]		  -	\
+	[button $w.expose -text Expose -command "expose $c frame" -state disabled] - 	\
+	[button $w.abort  -text Abort  -command "abort  $c" -state disabled] -
+
+	if { [llength $filter] } {
+	    set filtel [label $w.lfilel -text "Flt" -justify right -anchor e]
+	    set filter [drop  $w.filter ${c}_filter $filter]
+	} else {
+	    set filtel [label $w.filtel]
+	    set filter [label $w.filter]
+	}
+
+  Grid 									 \
+	[entry $w.exp -textvariable ${c}_exp -width 5 -justify right]	 \
+	[label $w.sec -text [set ::${c}_expunits] -anchor w] 		 \
+    	[label $w.lbin -text "Bin" -justify right -anchor e]		 \
+	[drop  $w.bin  ${c}_bin $bin] 					 \
+	[button $w.exptype -textvariable ${c}_typ -command "exptype $c"] \
+        $filtel $filter
+
+
+
+  Grid									\
+	[label $w.x1l  -text X1  -justify right -anchor e]		\
+	[entry $w.x1   -textvariable ${c}_x1 -width 5 -justify right]	\
+	[label $w.y1l  -text Y1  -justify right -anchor e]		\
+	[entry $w.y1   -textvariable ${c}_y1 -width 5 -justify right]	\
+	[button $w.box -text Box -command "box $c"] 	 		\
+	[label $w.prel -text pre:  -justify right -anchor e]		\
+	[entry  $w.pre -width 8 -textvariable ${c}_pre -justify right] - \
+
+  Grid									\
+	[label $w.wdl  -text Nx -justify right -anchor e]		\
+	[entry $w.wd   -textvariable ${c}_nx -width 5 -justify right]	\
+	[label $w.htl  -text Ny -justify right -anchor e]		\
+	[entry $w.ht   -textvariable ${c}_ny -width 5 -justify right]	\
+	x						 		\
+	[label $w.cntl  -text cnt:  -justify right -anchor e]		\
+	[entry  $w.cnt   -width 5 -textvariable ${c}_cnt -justify right]
+
+  if { $cool } {
+    Grid								\
+	[label  $w.temp  -textvariable ${c}_temp -width 6]		\
+	[label  $w.deg   -text deg]					\
+	[button $w.cool1 -text "On"  -command "cooler $c 1"] 		\
+	[button $w.cool0 -text "Off" -command "cooler $c 0"] 		\
+	[button $w.live  -text Live  -command "expose $c video" -state disabled]	\
+	[button $w.cube  -text Cube  -command "expose $c ecube"]	\
+	[entry  $w.ccnt  -textvariable ${c}_ccnt -width 5]
+  } else {
+    Grid								\
+	[label  $w.lgain -text Gain]					\
+	[entry  $w.gain -textvariable ${c}_gain -width 5 -justify right]	\
+	x x								\
+	[button $w.live  -text Live  -command "expose $c video"]	\
+	[button $w.cube  -text Cube  -command "expose $c ecube"]	\
+	[entry  $w.ccnt  -textvariable ${c}_ccnt -width 5]
+  }
+
+  Grid	x x								\
+	[label $w.limage  -text Image: -justify right -anchor e] -	\
+	[label $w.image  -textvariable ${c}_img -justify right -anchor e] - - -
+
+  Grid $w
+}
+
+
+camerabox .camera Sci $sci_filters $sci_bins $sci_cooler
+camerabox .camera WFS $wfs_filters $wfs_bins $wfs_cooler
+camerabox .camera Pix $pix_filters $pix_bins $pix_cooler
+
+proc filter  { c name indx op } {
+	upvar $name value
+
+    set C [string toupper $c]
+
+    if { [string compare [set ::${c}_state] Idle] } {
+	tk_messageBox -message "Cannot switch filters during exposure"	\
+		-parent .camera						\
+		-title "Filter warning" -type ok
+        set value $::Filter
+	return
+    }
+    msg_cmd WAVE$C "filter $value" 10000
+}
+
+proc box { c } {
+    if { [set ::${c}_full] } {
+	set ::${c}_full 0
+
+	set ::${c}_x1 [set ::${c}_bx1]
+	set ::${c}_y1 [set ::${c}_by1]
+	set ::${c}_nx [set ::${c}_bnx]
+	set ::${c}_ny [set ::${c}_bny]
+    } else {
+	set ::${c}_full 1
+
+	set ::${c}_x1 [set ::${c}_fx1]
+	set ::${c}_y1 [set ::${c}_fy1]
+	set ::${c}_nx [set ::${c}_fnx]
+	set ::${c}_ny [set ::${c}_fny]
+    }
+}
+
+proc full { c name indx op } {
+	upvar $name full
+
+    if { $full } {
+	.camera.$c.box configure -text Full
+    } else {
+	.camera.$c.box configure -text  Box
+    }
+}
+
+proc timer { c name indx op } {
+	upvar #0 ${c}_state state
+
+    if { ![string compare -length 8 $state Exposing] } {
+	upvar #0 ${c}_timer cnt
+	set state "[lindex $state 0] [format %5.1f $cnt]"
+    }
+}
+
+foreach n {   1   3 }		\
+	C { WFS PIX }		\
+	c { wfs pix } {
+
+   if { [string compare $C PIX] } { continue }
+
+    set env(WAVE$C) wavefront:300$n
+    msg_client WAVE$C
+
+    trace variable ${c}_state   w "state  $c"
+    trace variable ${c}_full    w "full   $c"
+    trace variable ${c}_filter  w "filter $c"
+
+    set ::${c}_pre	   ${c}
+    set ::${c}_cnt	      0
+    set ::${c}_exp	      1
+    set ::${c}_typ	  light
+
+    set ::${c}_mode	  idle
+
+    set ::${c}_siz [expr [set ::${c}_fnx] * [set ::${c}_fny] * 2 + 100000]
+
+#    msg_subscribe WAVE$C state ${c}_state {}            0.001 100000
+#    msg_subscribe WAVE$C timer ${c}_timer "timer    $c" 0.001 100000
+    msg_subscribe WAVE$C temp  ${c}_temp
+    msg_subscribe WAVE$C setp  ${c}_setp  "setpoint $c"
+
+    box $c
+ }
+
+catch { source $Counter }
+
+#msg_subscribe WAVEPIX gain  gain
+
+
+#vwait forever
+
+set PuntinoCal	  1
+set PuntinoSky	620
+
+Toplevel . "WAVESERV Motion Control" -1280+0
+Grid [axis_control [frame .axis_control]]
+
+proc home { } {
+	msg_cmd    WAVESERV home 120000
+}
+
+proc stow { } {
+	msg_cmd    WAVESERV stow  60000
+}
+
+proc callite { } {
+	msg_cmd    WAVESERV "pmove $::PuntinoCal" 30000
+	msg_cmd    WAVESERV "plite 1" 		   3000
+}
+
+proc xmirror { } {
+	msg_cmd    WAVESERV "pmove $::PuntinoSky" 30000
+	msg_cmd    WAVESERV "plite 0" 		   3000
+}
+
+proc uformat { format name indx op } {
+	upvar $name var
+
+	global WAVESERV
+
+    if { [string compare $WAVESERV(setting) {}] } {
+	if { [string compare $var "NaN"] } {
+	    set var [format $format $var]
+	}
+    }
+}
+
+msg_subscribe WAVESERV MDeg MDeg {uformat "%8.3f"}
+msg_subscribe WAVESERV TPos TPos {uformat "%8.3f"}
+msg_subscribe WAVESERV FPos FPos {uformat "%8.3f"}
+
+set MDeg 0
+set TArc 0
+set TPos 0
+set FPos 0
+
+proc offsets { } {
+	msg_set WAVESERV toffset $::toffset
+	msg_set WAVESERV moffset $::moffset
+	msg_set WAVESERV foffset $::foffset
+}
+
+proc tposi  { } { offsets; msg_cmd WAVESERV "tposi $::TArc" 60000 }
+proc trans  { } { offsets; msg_cmd WAVESERV "tmove $::TPos" 60000 }
+proc mirror { } { offsets; msg_cmd WAVESERV "mposi $::MDeg" 30000 }
+proc xfocus { } { offsets; msg_cmd WAVESERV "fmove $::FPos" 60000 }
+proc slew   { } { msg_set WAVESERV slew $::slew }
+
+proc selwfs { } {
+	msg_cmd    WAVESERV "select wfs" 30000
+}
+
+proc selsci { } {
+	msg_cmd    WAVESERV "select sci" 30000
+}
+
+proc askto { w what mess } {
+    if { ![string compare 								\
+		[tk_messageBox -parent $w -default no -icon warning -message $mess -type yesno]	\
+		yes] } {
+	eval $what
+    }
+}

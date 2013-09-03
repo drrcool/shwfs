@@ -1,0 +1,429 @@
+#!/usr/bin/python
+
+# see_forever - this script accepts a single argument as
+# a filename and does a seeing value calculation for the file
+# and places the seeing data into the wfs_seeing database table
+# tjt, jdg  7-2011
+
+import re
+import os
+import socket
+from math import *
+import sys
+import re
+import getopt
+import numpy
+import pyfits
+import imagestats
+import scipy.ndimage as nd
+#from scipy import optimize
+
+# fails without local X display
+#import pylab
+
+from numpy import *
+
+# unless we set this environment variable,
+# pyraf whines without a local X display
+os.environ['PYRAF_NO_DISPLAY']="1"
+from pyraf import iraf
+
+import MySQLdb as mdb
+
+# Wrapping everything in try/except exception handling makes this bulletproof,
+# but also impossible to debug during development.
+
+# Function to insert seeing value into MySQL database, mmtlogs:wfs_seeing_log  JDG  2011-07-18
+def fits2mysql ( filename ) :
+
+	print "fits2mysql called for: %s" % (filename)
+	print "fits2mysql called in directory: %s" % (os.getcwd())
+
+	if check_if_entry_exists ( filename ) :
+	    print "Entry for %s already exists" % (filename)
+	    return
+
+
+	try:
+	    info = seeing_read_header ( filename )
+	except: 
+	    print "Error (fits2mysql) cannot read file header: %s" % (filename)
+	    return
+
+	fwhm_pix = calc_seeing ( filename )
+
+	seeing_as = dimm_seeing(fwhm_pix, ref, scale)
+	#print " fwhm (pixels): ", fwhm_pix
+	#print " Seeing (arc-seconds): ", seeing_as
+
+#    seeingfile = file.replace('fits','seeing')
+#    fp = open(seeingfile, 'w')
+#    fp.write("%f %f\n" % (fwhm_pix, seeing_as))
+#    fp.close()
+
+	info['psf'] = str(fwhm_pix)
+	info['see_as'] = str(seeing_as)
+
+	info['mode'] = "'" + mode + "'" 
+	info['fits_file'] = "'" + date_dingus + "/" +filename + "'" 
+
+	# The calculated image seeing value is corrected to zenith (by sec(z)^0.6, where z is the zenith angle). 
+	# Doing 90 - the elevation angle to get the secant of the zenith angle.
+	el = float(info['el'])
+	zenith_angle_rads = (90.0 - el) * (3.14159265358979/180.0)
+	see_zenith_as = float(seeing_as) * cos(zenith_angle_rads)**0.6
+	info['see_zenith_as'] = str(see_zenith_as)
+
+	try:
+	    seeing_insert_record ( info )
+	except:
+	    print "Error (fits2mysql) cannot make db entry"
+	    return
+        
+	return
+
+def seeing_read_header ( filename ) :
+	rv = {}
+
+        # User pyfits to open the FITS file
+        hdulist = pyfits.open(filename)
+	header = hdulist[0].header
+
+	if header.has_key('DATE-OBS') and header.has_key('TIME-OBS') :
+	    # Date of observation, e.g., 2011-04-23
+	    day = header['DATE-OBS']
+	    # UT for observation (not localtime...), e.g., 02:38:22
+	    time = header['TIME-OBS']
+	    timestamp = day + ' ' + time
+	    # Let MySQL convert UT to local Arizona time!
+	    timestamp = "DATE_SUB('" + timestamp + "', INTERVAL 7 HOUR)"
+	else :
+	    # This is perfectly valid MySQL
+	    timestamp = "NOW()"
+
+	rv['timestamp'] = timestamp
+	# This will yield something like:
+	#  DATE_SUB('2010-11-01 06:29:47', INTERVAL 7 HOUR)
+
+        # Exposure time (in seconds)
+	rv['exptime'] = str(header['EXPTIME'])
+        # azimuth (in decimal degrees)
+	rv['az'] = str(header['AZ'])
+        # elevation (in decimal degrees)
+	rv['el'] = str(header['EL'])
+        # rotator angle (in decimal degrees)
+	rv['rot'] = str(header['ROT'])
+	rv['airmass'] = str(header['AIRMASS'])
+	hdulist.close()
+
+	return rv
+
+def check_if_entry_exists ( file ) :
+        database = 'mmtlogs';
+        table = 'wfs_seeing_log';
+        
+	# Normally this runs on hacksaw, and localhost works,
+	# but during testing, this runs on cholla, which is allowed
+	# access to the databases on hacksaw, and the second connect works.
+	try:
+	    conn = mdb.connect('localhost', 'mmtstaff', 'multiple', database);
+	except mdb.Error, e:
+	    #print "Cannot connect to seeing database: %s" % (e)
+	    try:
+		conn = mdb.connect('hacksaw', 'mmtstaff', 'multiple', database);
+	    except mdb.Error, e:
+		#print "Cannot connect to seeing database: %s" % (e)
+		raise RuntimeError, "no database access"
+        
+        cursor = conn.cursor()
+        
+        query = "SELECT id FROM " + table + " WHERE fits_file = '" + file + "'"
+        #print query
+        
+        cursor.execute(query)
+	vals = cursor.fetchone()
+	# vals will be a one element tuple if the record exists
+	# it will have the value None if it does not
+	#print vals
+        
+        cursor.close()
+        conn.close()
+
+	if ( vals ) :
+	    return True
+	return False
+
+def seeing_insert_record ( info ) :
+        database = 'mmtlogs';
+        table = 'wfs_seeing_log';
+        
+	# Normally this runs on hacksaw, and localhost works,
+	# but during testing, this runs on cholla, which is allowed
+	# access to the databases on hacksaw, and the second connect works.
+	try:
+	    conn = mdb.connect('localhost', 'mmtstaff', 'multiple', database);
+	except mdb.Error, e:
+	    #print "Cannot connect to seeing database: %s" % (e)
+	    try:
+		conn = mdb.connect('hacksaw', 'mmtstaff', 'multiple', database);
+	    except mdb.Error, e:
+		#print "Cannot connect to seeing database: %s" % (e)
+		raise RuntimeError, "no database access"
+        
+        cursor = conn.cursor()
+        
+        query = "INSERT INTO " + table + " ( "
+        query += "timestamp, exptime, az, el, rot, airmass, psf, see_as, see_zenith_as, mode, fits_file"
+        
+        query += ") VALUES ( "
+        
+        # Converting UT to local Arizona time!
+        query += info['timestamp'] + ", "
+        query += info['exptime'] + ", "
+        query += info['az'] + ", "
+        query += info['el'] + ", "
+        query += info['rot'] + ", "       
+        query += info['airmass'] + ", " 
+        query += info['psf'] + ", " 
+        query += info['see_as'] + ", "
+        query += info['see_zenith_as'] + ", "
+        query += info['mode'] + ", " 
+        query += info['fits_file'] + ")" 
+
+        #print query
+        
+        cursor.execute(query)
+        
+        cursor.close()
+        conn.close()
+
+	return True
+
+
+def dimm_seeing(fwhm, ref_fwhm, scale):
+
+    # this is the eff wavelength of both systems
+    lamb = 0.65e-6
+
+    # 14 apertures/pupil is also pretty close for both cases
+    # certainly for f/5 while f/9 is a little funky with the hex geom
+    d = 6.5/14.0
+
+    # reference files give me a mean fwhm of about 2.1-2.15 pix
+    if fwhm > ref_fwhm:
+        #
+        # deconvolve reference fwhm and convert to radians.
+        #
+        f = sqrt(2.0)*sqrt(fwhm**2 - ref_fwhm**2)*scale/206265.0
+        s = (f**2)/(8*log(2))
+
+        r0 = ( 0.358*(lamb**2)*(d**(-1.0/3.0))/s )**0.6
+        seeing = 206265*0.98*lamb/r0
+        return seeing
+    else:
+        return 0.0
+
+# We don't want to subtract the background if it has already been subtracted,
+# but our core assumption is that if there is no .dao file, this has not been
+# done.
+def subtract_bg ( fitsfile ) :
+
+    os.system("rm -f back.fits")
+
+    iraf.images()
+    iraf.images.imfit()
+    iraf.images.imutil()
+    # The crutil package moved as of iraf 2.16 3-2013
+    #iraf.crutil()
+    iraf.noao()
+    iraf.noao.imred()
+    iraf.noao.imred.crutil()
+    iraf.set(uparm="./uparm")
+
+    if mode == 'MMIRS':
+	iraf.imsurfit(fitsfile, 'back.fits', xorder=3, yorder=3, upper=2, lower=2, ngrow=35, rows='[20:510]', columns='[20:510]')
+	iraf.imarith(fitsfile, '-', 'back.fits', fitsfile)
+	iraf.cosmicrays(fitsfile,fitsfile,interactive='no',threshold=20,fluxratio=3,window=7)
+    else:
+	iraf.imsurfit(fitsfile, 'back.fits', xorder=2, yorder=2, upper=2, lower=2, ngrow=15)
+	iraf.imarith(fitsfile, '-', 'back.fits', fitsfile)
+
+def dao_calc ( file, dao_file ) :
+
+#    cfile = open("/mmt/shwfs/%s_reference.center" % mode, 'r')
+#    [xrefcen, yrefcen] = cfile.read().split()
+#    xrefcen = float(xrefcen)
+#    yrefcen = float(yrefcen)
+#    cfile.close
+
+    subtract_bg ( file )
+
+    hdulist = pyfits.open(file)
+    hdulist.verify('fix')
+    im = hdulist[0].data * 1.0
+    hdulist.close()
+
+    allstats = imagestats.ImageStats(im)
+    stats = imagestats.ImageStats(im, nclip=5)
+    mean = stats.mean
+    sig = stats.stddev
+
+    #print "Mean = ", mean
+    
+    if mode == 'F9':
+        smooth = nd.gaussian_filter(im, 5.0)
+        maxstars = 140
+        nsig = 5.0
+    elif mode == 'F5':
+        smooth = nd.gaussian_filter(im, 3.0)
+        maxstars = 140
+        nsig = 5.0
+    else:  # MMIRS
+        smooth = nd.gaussian_filter(im, 1.1)
+        maxstars = 155
+        nsig = 8.0
+        
+    nstars = 0
+    maxstars = maxstars - spottol
+
+    while nstars < maxstars:
+        spot_clip = smooth >= (mean + nsig*sig)
+        labels, num = nd.label(spot_clip)
+        nstars = num
+        nsig = nsig - 0.02
+        if nsig <= 1.5:
+            break
+#        print num, " spots found."
+
+    if nstars < maxstars:
+        print "Pupil too far off image or seeing too poor."
+        os.system("echo \"image;text 256 500 # text={Seeing too poor or pupil too far off image.}\" | xpaset WFS regions")
+        return (False, False, False)
+    
+    if mode == 'F9':
+        clip = smooth >= (mean + (nsig+2.0)*sig)
+    elif mode == 'F5':
+        clip = smooth >= (mean + (nsig-2.0)*sig)
+    else:
+        clip = smooth >= (mean + (nsig-2.0)*sig)
+
+    pos = nd.center_of_mass(im, labels, range(num))
+    counts = numpy.array( nd.sum(im, labels, range(num)) )
+
+    dao = open(dao_file, 'w')
+
+    spots = []
+  
+    for spot in pos[1:]:
+        (y, x) = spot
+        x = x + 1
+        y = y + 1
+        i = pos.index(spot)
+        c = counts[i]
+        if mode == 'MMIRS':
+            if x < 450 and y < 450 and x > 50 and y > 50:
+                spots.append( (x, y, c) )
+                dao.write("%8.3f  %8.3f\n" % (x, y))
+        else:
+            if x < 500 and y < 500 and x > 5 and y > 5:
+                spots.append( (x, y, c) )
+                dao.write("%8.3f  %8.3f\n" % (x, y))
+        
+    dao.close()
+
+def calc_seeing ( file ) :
+
+    dao_file = file.replace('fits','dao')
+    # print dao_file
+
+    if ( not os.path.exists(dao_file) ) :
+	dao_calc ( file, dao_file )
+
+    iraf.noao()
+    iraf.noao.obsutil()
+    iraf.set(stdgraph="uepsf")
+
+    data = iraf.psfmeasure(file, coords='markall', wcs='logical', display='no', frame=1, level=0.5, size='FWHM', radius=10.0, sbuffer=1.0, swidth=3.0, iterations=1, logfile=log, imagecur=dao_file, Stdout=1)
+
+    # print "daofind psfmeasure data: ", data
+    # last = data.pop()
+    # data.append(last)
+    # print "daofind psfmeasure last line of data: ", last
+    # psfmeasure returns lots of information (data for each spot), but we just
+    # want the last line (the average fwhm), which looks like:
+    # Average full width at half maximum (FWHM) of 6.0163
+
+    fwhm_pix = float(data.pop().split().pop())
+    return fwhm_pix
+
+def get_ref ( mode ) :
+    ffile = open("/mmt/shwfs/%s_reference.fwhm" % mode, 'r')
+    [reffwhm, reffwhm_pix] = ffile.read().split()
+    reffwhm_pix = float(reffwhm_pix)
+    ffile.close
+
+    return reffwhm_pix
+
+########################################################################
+
+
+# python makes it awkward to do this ...
+cmd = "/bin/date +%Y%m%d"
+date_dingus = os.popen(cmd, 'r').read().rstrip()
+
+# This is F5
+#fits_filename = "/u1/tom/shwfs/datadir_20110603/test_0002.fits"
+#mode = "F5"
+
+# This is F9
+#fits_filename = "/u1/tom/shwfs/datadir_20101101/auto_wfs_0013.fits"
+#mode = "F9"
+
+# This already exists in the db
+#fits_filename = "/home/jdgibson/perl/shwfs/manual_wfs_0000.fits"
+
+if len(sys.argv) != 3 :
+    print "Usage: see_forever list,list mode"
+    sys.exit()
+
+file_list = sys.argv[1]
+mode = sys.argv[2]
+#spottol = int(sys.argv[3])
+
+# This was the third argument to the original daofind script.
+# it is an integer that reduces the required number of star images
+# to find centroids for.
+# It is zero when running the WFS in real time, 30 had been used in
+# after the fact seeing calculation scripts.
+spottol = 30
+
+# pixel scale, multiply a value in pixels by
+# this to get a value in arc-seconds
+Xscale = {}
+Xscale['F5'] = 0.135
+Xscale['F9'] = 0.12
+Xscale['MMIRS'] = 0.208
+
+if not Xscale.has_key ( mode ) :
+    print "Unexpected mode: %s" % (mode)
+    sys.exit()
+
+scale = Xscale[mode]
+
+ref = get_ref ( mode )
+
+# works fine for one file or many
+# added the exception handling to make this more bulletproof
+# (this failed on first deployment because hoseclamp could not
+# access the database on hacksaw).  Would be good to run this
+# directly from the tcl script and capture output and relay
+# it to the terminal.
+for file in file_list.split(',') :
+    try:
+	fits2mysql ( file )
+    except:
+    	print "Cannot make db entry for: %s\n", (file)
+
+sys.exit()
+
+# THE END

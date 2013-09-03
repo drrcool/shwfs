@@ -1,0 +1,49 @@
+#!/bin/sh
+
+PMACDATA=/home/john/src/waveserv/pmacdata
+
+   cd $PMACDATA
+   cp $1 /tmp/$$.c
+
+   gcc -E -I. /tmp/$$.c 				\
+ | mawk '
+    { 
+ 	# Pre processor line removal
+	#
+	if ( $0 ~ "# [0-9]+ \"" ) 	next
+
+	# Blank line removal
+	#
+	if ( NF == 0 && blank )		next
+	if ( NF == 0 ) 	blank = 1
+	else		blank = 0
+
+	# token paste
+	#
+	gsub("\\\#" , "#:")
+
+	gsub("[ \t]*:[ \t]*" , "")
+	gsub("[ \t]*->[ \t]*", "->")
+	gsub("[ \t]*\+[ \t]*", "+")
+	gsub("[ \t]*-[ \t]*" , "-")
+	gsub("[ \t]*#[ \t]*" , "#")
+
+	gsub("[ \t]*\([ \t]*" , " ( ")
+	gsub("[ \t]*\)[ \t]*" , " ) ")
+	gsub("[ \t]*=[ \t]*" , " = ")
+	gsub("[ \t]*=  =[ \t]*" , " == ")
+	gsub("[ \t]*! =[ \t]*" , " != ")
+	gsub("[ \t]*!=[ \t]*" , " != ")
+
+	# New line substitution.
+	#
+	sub(/^[ \t]*/, "")
+	gsub(/[ \t]*\\n[ \t]*/, "\n")
+    }
+    /.*FRAX.*/ {
+		 gsub(" ", "")
+		 gsub("\t", "")
+		}
+    { print }
+ ' | pmacindent
+

@@ -1,0 +1,190 @@
+<?xml version="1.0" standalone="no"?> <!--*- mode: xml -*-->
+<!DOCTYPE glade-interface SYSTEM "http://glade.gnome.org/glade-2.0.dtd">
+
+<glade-interface>
+<requires lib="gnome"/>
+
+<widget class="GtkWindow" id="MainWindow">
+  <property name="visible">True</property>
+  <property name="title" translatable="yes">Power</property>
+  <property name="type">GTK_WINDOW_TOPLEVEL</property>
+  <property name="window_position">GTK_WIN_POS_NONE</property>
+  <property name="modal">False</property>
+  <property name="resizable">False</property>
+  <property name="destroy_with_parent">False</property>
+  <property name="decorated">True</property>
+  <property name="skip_taskbar_hint">False</property>
+  <property name="skip_pager_hint">False</property>
+  <property name="type_hint">GDK_WINDOW_TYPE_HINT_NORMAL</property>
+  <property name="gravity">GDK_GRAVITY_NORTH_WEST</property>
+  <property name="focus_on_map">True</property>
+  <property name="urgency_hint">False</property>
+  <signal name="destroy" handler="on_MainWindow_destroy" last_modification_time="Sun, 15 Jun 2003 08:43:49 GMT"/>
+
+  <child>
+    <widget class="GtkVBox" id="vbox1">
+      <property name="border_width">5</property>
+      <property name="visible">True</property>
+      <property name="homogeneous">False</property>
+      <property name="spacing">5</property>
+
+      <child>
+	<widget class="GtkButton" id="Servo">
+	  <property name="visible">True</property>
+	  <property name="tooltip" translatable="yes">Toggle power to the servos. For safety, turn this off at end of night.</property>
+	  <property name="can_focus">True</property>
+	  <property name="label" translatable="yes">Servo Power is OFF</property>
+	  <property name="use_underline">True</property>
+	  <property name="relief">GTK_RELIEF_NORMAL</property>
+	  <property name="focus_on_click">True</property>
+	  <signal name="clicked" handler="on_Servo_clicked" last_modification_time="Wed, 22 Oct 2003 20:50:50 GMT"/>
+	</widget>
+	<packing>
+	  <property name="padding">0</property>
+	  <property name="expand">False</property>
+	  <property name="fill">False</property>
+	</packing>
+      </child>
+
+      <child>
+	<widget class="GtkButton" id="Encoder">
+	  <property name="visible">True</property>
+	  <property name="tooltip" translatable="yes">Toggle power to encoders. Best to turn off at end of night.</property>
+	  <property name="can_focus">True</property>
+	  <property name="label" translatable="yes">Encoder Power is OFF</property>
+	  <property name="use_underline">True</property>
+	  <property name="relief">GTK_RELIEF_NORMAL</property>
+	  <property name="focus_on_click">True</property>
+	  <signal name="clicked" handler="on_Encoder_clicked" last_modification_time="Wed, 22 Oct 2003 20:51:29 GMT"/>
+	</widget>
+	<packing>
+	  <property name="padding">0</property>
+	  <property name="expand">False</property>
+	  <property name="fill">False</property>
+	</packing>
+      </child>
+
+      <child>
+	<widget class="GtkButton" id="Puntino">
+	  <property name="visible">True</property>
+	  <property name="tooltip" translatable="yes">Toggle power to the Puntino wavefront sensor. Can be left on during the day.</property>
+	  <property name="can_focus">True</property>
+	  <property name="label" translatable="yes">Puntino Power is OFF</property>
+	  <property name="use_underline">True</property>
+	  <property name="relief">GTK_RELIEF_NORMAL</property>
+	  <property name="focus_on_click">True</property>
+	  <signal name="clicked" handler="on_Puntino_clicked" last_modification_time="Wed, 22 Oct 2003 20:52:11 GMT"/>
+	</widget>
+	<packing>
+	  <property name="padding">0</property>
+	  <property name="expand">False</property>
+	  <property name="fill">False</property>
+	</packing>
+      </child>
+
+      <child>
+	<widget class="GtkButton" id="SBIG">
+	  <property name="visible">True</property>
+	  <property name="tooltip" translatable="yes">Toggle power to SBIG WFS camera. Turn off cooling and allow it to warm up for at least 15 minutes before powering off at end of night.</property>
+	  <property name="can_focus">True</property>
+	  <property name="label" translatable="yes">SBIG Power is OFF</property>
+	  <property name="use_underline">True</property>
+	  <property name="relief">GTK_RELIEF_NORMAL</property>
+	  <property name="focus_on_click">True</property>
+	  <signal name="clicked" handler="on_SBIG_clicked" last_modification_time="Wed, 22 Oct 2003 20:52:42 GMT"/>
+	</widget>
+	<packing>
+	  <property name="padding">0</property>
+	  <property name="expand">False</property>
+	  <property name="fill">False</property>
+	</packing>
+      </child>
+
+      <child>
+	<widget class="GtkButton" id="Apogee">
+	  <property name="visible">True</property>
+	  <property name="tooltip" translatable="yes">Toggle power to Apogee science camera. Turn off cooling and allow it to warm up for at least 15 minutes before powering off at end of night.</property>
+	  <property name="can_focus">True</property>
+	  <property name="label" translatable="yes">Apogee Power is OFF</property>
+	  <property name="use_underline">True</property>
+	  <property name="relief">GTK_RELIEF_NORMAL</property>
+	  <property name="focus_on_click">True</property>
+	  <signal name="clicked" handler="on_Apogee_clicked" last_modification_time="Wed, 22 Oct 2003 20:54:46 GMT"/>
+	</widget>
+	<packing>
+	  <property name="padding">0</property>
+	  <property name="expand">False</property>
+	  <property name="fill">False</property>
+	</packing>
+      </child>
+
+      <child>
+	<widget class="GtkButton" id="StellaCam">
+	  <property name="visible">True</property>
+	  <property name="tooltip" translatable="yes">Toggle power to the science camera filter wheel. Can be left on.</property>
+	  <property name="can_focus">True</property>
+	  <property name="label" translatable="yes">StellaCam Power is OFF</property>
+	  <property name="use_underline">True</property>
+	  <property name="relief">GTK_RELIEF_NORMAL</property>
+	  <property name="focus_on_click">True</property>
+	  <signal name="clicked" handler="on_Filter_clicked" last_modification_time="Wed, 22 Oct 2003 20:55:07 GMT"/>
+	</widget>
+	<packing>
+	  <property name="padding">0</property>
+	  <property name="expand">False</property>
+	  <property name="fill">False</property>
+	</packing>
+      </child>
+
+      <child>
+	<widget class="GtkHSeparator" id="hseparator1">
+	  <property name="height_request">5</property>
+	  <property name="visible">True</property>
+	</widget>
+	<packing>
+	  <property name="padding">5</property>
+	  <property name="expand">True</property>
+	  <property name="fill">True</property>
+	</packing>
+      </child>
+
+      <child>
+	<widget class="GtkButton" id="WFSpower">
+	  <property name="visible">True</property>
+	  <property name="tooltip" translatable="yes">Toggle power to WFS computer via Pulizzi switch P5-5 in 2nd floor instrument lab.</property>
+	  <property name="can_focus">True</property>
+	  <property name="label" translatable="yes">WFS Computer Power is OFF</property>
+	  <property name="use_underline">True</property>
+	  <property name="relief">GTK_RELIEF_NORMAL</property>
+	  <property name="focus_on_click">True</property>
+	  <signal name="clicked" handler="on_WFSpower_clicked" last_modification_time="Tue, 16 Mar 2004 10:15:24 GMT"/>
+	</widget>
+	<packing>
+	  <property name="padding">0</property>
+	  <property name="expand">False</property>
+	  <property name="fill">False</property>
+	</packing>
+      </child>
+
+      <child>
+	<widget class="GtkButton" id="WFSDrivepower">
+	  <property name="visible">True</property>
+	  <property name="tooltip" translatable="yes">Toggle power to WFS drive motors via Pulizzi switch P7-3 in 2nd floor instrument lab.</property>
+	  <property name="can_focus">True</property>
+	  <property name="label" translatable="yes">WFS Drive Power is OFF</property>
+	  <property name="use_underline">True</property>
+	  <property name="relief">GTK_RELIEF_NORMAL</property>
+	  <property name="focus_on_click">True</property>
+	  <signal name="clicked" handler="on_WFSDrivepower_clicked" last_modification_time="Tue, 16 Mar 2004 10:16:51 GMT"/>
+	</widget>
+	<packing>
+	  <property name="padding">0</property>
+	  <property name="expand">False</property>
+	  <property name="fill">False</property>
+	</packing>
+      </child>
+    </widget>
+  </child>
+</widget>
+
+</glade-interface>

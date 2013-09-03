@@ -18,7 +18,7 @@
 # by glade), so when things go wrong, you get .... nothing!
 # There may be a way to figure this out, but I haven't yet.
 
-### require 'libglade2'
+require 'libglade2'
 require 'thread'
 require 'timeout'
 require 'socket'
@@ -27,8 +27,8 @@ require 'socket'
 #  it provides the MSG module, which is included below.
 #require "/mmt/shwfs/msg.rb"
 
-## $:.unshift "/mmt/scripts"
-require '/mmt/shwfs/MMTsocket'
+$:.unshift "/mmt/scripts"
+require 'MMTsocket'
 
 ### define the catalog GUI
 class WFSCat
@@ -42,9 +42,9 @@ class WFSCat
 
     # set a global path to find scripts and stuff
     if ENV['WFSROOT']
-      @path = ENV['WFSROOT']
+      @wfsroot = ENV['WFSROOT']
     else
-      @path = "/mmt/shwfs"
+      @wfsroot = "/mmt/shwfs"
     end
 
     #@log_path = "./wfscat.log"
@@ -102,7 +102,7 @@ class WFSCat
 #      'decoff'
 #      ]
 
-    @glade = GladeXML.new("#{@path}/wfscat/wfscat.glade") {|handler| method(handler)}
+    @glade = GladeXML.new("#{@wfsroot}/glade/wfscat.glade") {|handler| method(handler)}
  
     @catwindow = @glade.get_widget("MainWindow")
     @status = @glade.get_widget("Status")
@@ -233,7 +233,7 @@ class WFSCat
       ra = hms2deg(ra_text)
       dec = hms2deg(dec_text)
       return if (ra == 'bad' || dec == 'bad')
-      result = `#{@path}/wfscat/findstars #{ra} #{dec} #{fov} #{mag} | grep S | sort -n -k11`
+      result = `#{@wfsroot}/wfscat/findstars #{ra} #{dec} #{fov} #{mag} | grep S | sort -n -k11`
       @model.clear
       result.each_line { |star|
 	data = star.split(' ')
@@ -328,6 +328,7 @@ class WFSCat
 
 	set_offsets(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
 	#move_tel(name, ra, dec, @pma[name], @pmd[name], @prev['sky'], 2000.0)
+
 	s = move_catalog( name, ra, dec, pm_ra, pm_dec )
 	if s != "OK"
 	  report( "Slew Failed" )
@@ -583,6 +584,7 @@ class WFSCat
     hexapod = MMTsocket.hexapod
     loop do
       break if hexapod.get( "motionFlag" ) == "0"
+      print hexapod.get( "motionFlag" )
       sleep(1)
     end
     hexapod.done

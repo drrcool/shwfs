@@ -1,0 +1,14 @@
+
+open program ErrorProgram
+	clear
+	command"H"
+	RecTimer
+	SetRunning(0)
+	SetBrake(M)
+	SetBrake(T)
+	SetBrake(C)
+	SetBrake(F)
+	CMD^K
+	stop
+close
+

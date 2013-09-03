@@ -1,0 +1,14 @@
+#!/bin/sh
+
+# wrapper script to launch the WFS software
+# tjt  10-5-2011
+
+export WFSROOT=/mmt/shwfs
+
+if [ $# -ne 2 ]
+then
+	echo "usage: shwfs F9 Blue"
+	exit
+fi
+
+exec $WFSROOT/shwfs_unified.tcl $1 $2

@@ -1,0 +1,8 @@
+
+open program DummyProgram
+ ProgramInit(M)
+
+ Dwell 1000
+
+ ProgramDone(M)
+close

@@ -1,0 +1,32 @@
+#!/usr/bin/ruby
+
+require 'socket'
+
+# open a socket on SNAPPY (generally run on hoseclamp)
+socket = TCPSocket.open("wavefront", 3001)
+
+# image1 is the full image
+socket.send("1 expose 0 light 1.0\n", 0)
+
+# msg sends a 1 blk 619200 in return; snag it here
+ack = socket.readline
+sleep(5)
+socket.send("1 fits 0 2632960\n", 0)
+ack = socket.readline
+
+# now read the actual image and close up.  
+# don't know what the deal is with 619200 vs. 617280
+# since 617280 is the actual image size in shared memory.  
+# whatever, this works.
+data = socket.read(529920)
+socket.close
+
+# write the data out to a file
+if (ARGV[0])
+  output = File.new(ARGV[0], "w")
+  output.print(data)
+  output.close
+else
+  puts "Usage: guideimage <fitsfile>"
+end
+

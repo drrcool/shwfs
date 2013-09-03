@@ -1,0 +1,175 @@
+#!/usr/bin/env python
+#===============================================================================
+#
+# Python Numpy/Scipy program for analyzing MMTO WFS seeing data.
+#
+#===============================================================================
+
+import numpy as np
+import matplotlib.cm as cm
+import matplotlib.pyplot as plt
+import scipy.stats as stats
+import MySQLdb
+import math
+
+
+params = {'axes.labelsize': 14,
+          'axes.fontsize' : 14,
+          'axes.set_aspect': 14,
+          'text.fontsize': 12,
+          'legend.fontsize': 14,
+          'xtick.labelsize': 14,
+          'ytick.labelsize': 14,
+          'figure.facecolor' : 'white',
+          'figure.dpi' : 150 }
+
+plt.rcParams.update(params)
+
+plt.rcParams['figure.figsize'] = 10, 8
+
+# Date for beginning for WFS Data
+# t1 = "2003-03-20"
+
+# Date for beginng of wind data from any sensor.
+t1 = "2012-05-01"
+
+# Date for starting of temptrax1 background log.
+# t1 = "2006-04-18"
+
+# End of study, remains the same...
+t2 = "2012-09-01"
+
+x = []
+y = []
+
+# Get the MySQL data.
+#
+# Reference:
+# http://mysql-python.sourceforge.net/MySQLdb.html
+db=MySQLdb.connect(user="mmtstaff",passwd="multiple",db="mmtlogs")
+
+# Read in data
+c=db.cursor()
+
+# Execute the SQL command to get the seeing data.
+# c.execute("""SELECT `timestamp`, `see_zenith_as` FROM `wfs_seeing_log` WHERE timestamp > %s AND timestamp < %s AND (`mode` = "F5" OR `mode` = "F9") ORDER BY `wfs_seeing_log`.`timestamp` ASC""", (t1, t2))
+c.execute("""SELECT `timestamp`, `see_zenith_as`, `mode`, MONTH(`timestamp`) FROM `wfs_seeing_log` WHERE timestamp > %s AND timestamp < %s ORDER BY `wfs_seeing_log`.`timestamp` ASC""", (t1, t2))
+
+# Fetch all the rows in a list of lists.
+results = c.fetchall()
+
+# A counter of the number of rows returned from the MySQL database.
+count = 0
+
+for row in results:
+    count += 1
+    timestamp = row[0]
+    see_zenith_as = row[1]
+    wfs_mode = row[2]
+    month = row[3]
+    
+    print "row=%s" % (count,)
+
+    c.execute("""SELECT `timestamp`, `ds_wind_avg_speed` FROM `mount_background_log` WHERE timestamp > %s AND timestamp <= ADDTIME(%s, '00:01:30') ORDER BY `timestamp` ASC LIMIT 1""", (timestamp,timestamp))
+
+    results2 = c.fetchall()
+
+    title_str = """Wind Speed Histogram: %s to %s""" % (t1, t2)
+    xlabel_str = 'Average Wind Speed (meters/second)'
+    ylabel_str = 'Frequency'
+    max_x = 15.0
+    min_x = 0.0
+    max_y = 1.5
+    min_y = 0.0
+    
+    for row2 in results2:
+        # Temperature difference depends on the mode being used.
+        # 
+        val_param1 = row2[1]  # `ds_wind_avg_speed
+        try:
+            # Checking that numbers are floats.
+            if float(val_param1):                
+                if val_param1 >= min_x:
+                    if val_param1 <= max_x:
+                        if see_zenith_as >= min_y:
+                            if see_zenith_as <= max_y:
+                                x.append(val_param1)
+                                y.append(see_zenith_as)
+                                print "Count %s, Adding %s" % (count, val_param1)
+                                
+               
+        except:
+            print "Error: Bad data"
+            
+
+# disconnect from server
+db.close()
+
+m1 = np.array(x)
+m2 = np.array(y)
+
+#print "Size np1 = %s" % (len(x))
+#print "Median np1 =  %s" % (np.ma.extras.median(np1))
+#print "Mean np1 =  %s" % (np1.mean())
+
+txt =  "Wind Speed Statistics:\n"
+txt += "  Samples = %s\n" % (len(x))
+txt += "  Median =  %.2f meters/second\n" % (np.ma.extras.median(m1))
+# txt += "  Mean =  %.2f meters/second\n" % (np.ma.average(m1))
+txt += "Seeing Statistics:\n"
+txt += "  Samples = %s\n" % (len(y))
+txt += "  Median =  %.2f arc seconds" % (np.ma.extras.median(m2))
+# txt += "  Mean =   %.2f arc-seconds" % (np.ma.average(m2))
+
+title_str = """MMTO Seeing: %s to %s""" % (t1, t2)
+xlabel_str = 'Average Wind Speed (meters/second)'
+ylabel_str = 'Seeing (Arc seconds, Corrected to Zenith)'
+# These may be adjusted for various plotting formats.
+max_x = 20.0
+min_x = 0.0
+max_y = 1.6 # Maximum seeing to plot
+min_y = 0.3 # Mininum seeing to plot
+
+xmin = m1.min()
+xmax = m1.max()
+ymin = m2.min()
+ymax = m2.max()
+
+# Perform a kernel density estimator on the results
+X, Y = np.mgrid[xmin:xmax:100j, ymin:ymax:100j]
+positions = np.c_[X.ravel(), Y.ravel()]
+values = np.c_[m1, m2]
+
+# Trying Silverman factor in place of the default Scott's factor.
+# stats.kde.covfact = "silverman"
+# stats.kde.covfact = 0.5
+
+kernel = stats.kde.gaussian_kde(values.T)
+Z = np.reshape(kernel(positions.T).T, X.T.shape)
+
+# plt.xlim(min_x,max_x)
+# plt.ylim(min_y,max_y)
+
+plt.imshow( np.rot90(Z), extent=[xmin, xmax, ymin, ymax])
+
+# This plots the individual points, but makes the plot very "dirty" looking, in my opinion.
+# plt.plot(m1, m2, 'k.', markersize=2)
+
+plt.colorbar()
+
+plt.text(7, 1.45, txt, horizontalalignment='left', verticalalignment='top', color='white', fontsize=14)
+
+plt.title(title_str, fontsize=18)
+plt.xlabel(xlabel_str, fontsize=14)
+plt.ylabel(ylabel_str, fontsize=14)
+plt.grid(True)
+
+plt.axis('tight')
+
+show = False
+
+if show:
+    plt.show()
+else:
+    plt.savefig("trisum_seeing_wind_speed.png")
+

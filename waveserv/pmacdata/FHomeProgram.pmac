@@ -1,0 +1,14 @@
+
+open program FHomeProgram
+ clear
+
+  HomeInit(F)
+
+  HomeToLimit(F, P)
+  HomeToLimit(F, M)
+
+  HomeToFlags(F)
+
+
+  HomeDone(F)
+close 

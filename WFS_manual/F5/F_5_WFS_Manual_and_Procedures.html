@@ -1,0 +1,410 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+  <meta http-equiv="content-type"
+ content="text/html; charset=ISO-8859-1">
+  <title>F/5 WFS Manual and Procedures</title>
+  <meta name="author" content="T.E. Pickering">
+</head>
+<body>
+<h1 style="text-align: center;">F/5 WFS Manual and Procedures</h1>
+<br>
+This document covers the software and usage of the F/5 wavefront
+sensor.&nbsp; For details on the optics and hardware, please refer to
+Dan Fabricant's <a
+ href="http://cfa-www.harvard.edu/cfa/oir/MMT/MMTI/wfs.html">F/5 WFS
+Manual</a>. <br>
+<br>
+To bring up the software interface to the F/5 wavefront sensor, go to
+the MMTO submenu in the main system menu on <tt><b>hoseclamp</b></tt>
+	  (will not work properly from <tt>hacksaw</tt>,
+	  <tt>alewife</tt>, or other control room workstations) and
+click on 'F/5 Wavefront Sensor'.&nbsp; Most of the windows are similar
+to their counterparts in the <a
+ href="http://www.mmto.org/WFS/F_9_WFS_User_Manual.html">F/9 version of
+the software</a> with slight differences in a couple plus some
+completely new ones.&nbsp; The Wavefront Zernikes window differs in its
+lack of a 'set reference focus' button and the splitting of focus and
+come corrections into separate buttons.&nbsp; The DS9 window includes a
+new 'Observe' menu for running 'Init Pointing' on PixelLink images to
+center up WFS stars.&nbsp; The F/5 WFS data also looks somewhat
+different than F/9's due to the square vs. hexagonal lenslet geometry. <br>
+<div style="text-align: center;">
+<h3>Wavefront Zernikes Window</h3>
+<img src="zernikes.png" title="" alt="Wavefront Zernikes Window"
+ style="width: 292px; height: 668px;"><br>
+<br>
+<h3>DS9 Window with F/5 WFS Data</h3>
+<img src="ds9.png" title="" alt="DS9 Window"
+ style="width: 664px; height: 796px;"><br>
+</div>
+<br>
+<br>
+Due to the much greater complexity of the F/5 WFS system, the main F/5
+interface window is significantly different than its F/9 counterpart:<br>
+<div style="text-align: center;"><img src="main.png" title=""
+ alt="Main F/5 Interface Window" style="width: 477px; height: 440px;"><br>
+<br>
+<div style="text-align: left;">Please note that the Apogee science
+camera is currently dead which is why the buttons that affect it are
+greyed out. This window is divided into 5 main sections:<br>
+<ol>
+  <li><span style="font-weight: bold;">Stage Motion</span> -- Buttons
+to Stow the WFS, move it on axis, or move it to a specified position.</li>
+  <li><span style="font-weight: bold;">Camera Selection</span> -- One
+selection moves the camera stage to select between the WFS and science
+camera and the other moves the WFS's internal reference source in and
+out of the beam.&nbsp; Currently, neither of these is used during
+normal operations.&nbsp; The science camera is defunct and WFS
+reference images have been shown to be very stable over time.&nbsp; <br>
+  </li>
+  <li><span style="font-weight: bold;">Science Camera Config</span> --
+Not used until the science camera is replaced.</li>
+  <li><span style="font-weight: bold;">Camera Cooling</span> -- Toggle
+and monitor the cooling of the WFS camera.</li>
+  <li><span style="font-weight: bold;">Image Acquisition</span> -- Set
+up and take exposures as in the F/9 interface.&nbsp; Setting filename
+to <span style="font-family: monospace;">test</span> will force it to
+save every image as <span style="font-family: monospace;">test.fits</span>.&nbsp;
+Any other filename will be automatically numbered so that no data gets
+overwritten. <br>
+  </li>
+</ol>
+Less frequently used windows are brought up from the Control menu found
+on the main window's menubar.&nbsp; The menu entries and windows are:<br>
+<ul>
+  <li><span style="font-weight: bold;">Power On/Off <br>
+    </span>
+    <table cellpadding="2" cellspacing="2" border="0"
+ style="text-align: left; width: 100%;">
+      <tbody>
+        <tr>
+          <td style="vertical-align: top;"><img src="power.png" title=""
+ alt="Power On/Off Window" style="width: 184px; height: 289px;"><br>
+          <br>
+          </td>
+          <td style="vertical-align: top;">The top six buttons in this
+window toggle power switches within the WFS.&nbsp; The bottom two
+communicate with the Pulizzi switches in the 2nd floor instrument room to
+toggle power to the WFS computer and WFS drives.&nbsp; Be very careful
+not to inadvertently turn them off!!!&nbsp; <br>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+  <li><span style="font-weight: bold;">Run PixelLink&nbsp; </span><br>
+    <table cellpadding="2" cellspacing="2" border="0"
+ style="text-align: left; width: 100%;">
+      <tbody>
+        <tr>
+          <td style="vertical-align: top;"><img src="pixelink.png"
+ title="" alt="PixelLink Window" style="width: 440px; height: 232px;"><br>
+          <br>
+          </td>
+          <td style="vertical-align: top;">The PixelLink camera is
+pretty fussy about its configuration, especially binning, so you'll
+likely want to leave the defaults alone.&nbsp; You may want to change
+the exposure time (200-250 millisec is about the maximum it will
+accept), but you shouldn't need to for most WFS stars unless they are
+way out of focus.&nbsp; Occasionally the first image taken after
+changing exposure time is corrupted, but subsequent frames should be
+fine. Under normal use the directory and filename should be left at
+their default values. <br>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+  <li><span style="font-weight: bold;">Configure WFS </span><br>
+    <table cellpadding="2" cellspacing="2" border="0"
+ style="text-align: left; width: 100%;">
+      <tbody>
+        <tr>
+          <td style="vertical-align: top;"><img src="config.png"
+ title="" alt="WFS Stage Configuration Window"
+ style="width: 305px; height: 483px;"><br>
+          <br>
+          </td>
+          <td style="vertical-align: top;">You should only need to use
+this window at the beginning of the night to home the WFS after a full
+shutdown and then set the stage motor configurations to their Hecto or
+MegaCam defaults.&nbsp; <br>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+  <li><span style="font-weight: bold;">WFS Catalog </span><br>
+    <table cellpadding="2" cellspacing="2" border="0"
+ style="text-align: left; width: 100%;">
+      <tbody>
+        <tr>
+          <td style="vertical-align: top;"><img src="catalog.png"
+ title="" alt="WFS Catalog GUI" style="width: 535px; height: 505px;"><br>
+          </td>
+          <td style="vertical-align: top;">This window allows you to
+search the entire Tycho2 catalog (which is complete to fainter than
+11th magnitude) for nearby WFS stars within a specified radius in
+degrees.&nbsp; This interface is significantly faster at searching than
+the scope window and should save time spent juggling between observer
+and WFS catalogs. You can either type in search coordinates (J2000) by
+hand and click 'Find at Specified Coordinates' or click 'Find at
+Current Telescope Catalog Position' to query the current catalog
+coordinates in the mount.&nbsp; This will store these coordinates
+internally as well as any mount offsets. After finding a set of stars,
+you can click on the column headings to sort by the various
+columns.&nbsp; Click on a star to highlight and select it and then 'Go
+to Selected Star' to turn the rotator off and send the telescope there.&nbsp; Clicking 'Return
+to Previous Position' will send the telescope back to the stored
+catalog coordinates, turn the rotator back on, and reapply the stored mount offsets.<br>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+  <li><span style="font-weight: bold;">WFS Computer </span><br>
+    <table cellpadding="2" cellspacing="2" border="0"
+ style="text-align: left; width: 100%;">
+      <tbody>
+        <tr>
+          <td style="vertical-align: top;"><img src="vnc.png" title=""
+ alt="WFS Computer VNC Session" style="width: 405px; height: 314px;"><br>
+          <br>
+          </td>
+          <td style="vertical-align: top;">This is a VNC viewer window
+that displays the console of the WFS computer.&nbsp; You need to access
+this to start the WAVESERV and WAVECAMR servers after a full
+shutdown.&nbsp; Check with T. Pickering if you need the VNC
+password.&nbsp; The hostname for the WFS computer is <span
+ style="font-family: monospace;">f5wave</span> and its IP number is
+192.168.1.150.&nbsp; <br>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+  <li><span style="font-weight: bold;">WAVEdisplay </span><br>
+    <table cellpadding="2" cellspacing="2" border="0"
+ style="text-align: left; width: 100%;">
+      <tbody>
+        <tr>
+          <td style="vertical-align: top;"><img src="waveserv.png"
+ title="" alt="WAVEdisplay Window" style="width: 599px; height: 414px;"><br>
+          </td>
+          <td style="vertical-align: top;">This is the SAO engineering
+interface to the WFS systems.&nbsp; It is not necessary to use
+normally, but it can be useful for monitoring what's going on and for
+debugging things if something's not working quite right. <br>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </li>
+</ul>
+<br>
+<div style="text-align: center;">
+<h3>Start-up Procedure after Partial Shutdown</h3>
+<ul style="text-align: left;">
+  <li>Bring up the F/5 wavefront sensor interface from the MMTO menu.</li>
+  <li>If the WFS computer can't be reached, the F/5 WFS Interface
+window will report that it failed to connect.&nbsp; This will be the
+case after a full shutdown, but hopefully not after a partial shutdown.
+    <br>
+  </li>
+  <li>If no errors are reported, bring up the Power window to make sure
+everything is on.&nbsp; Turn Servo and Encoder Power on if they are
+off. Close the Power window once everything is turned on. <br>
+  </li>
+  <li>Turn on the cooling for the WFS camera.&nbsp; The temperature
+should start to update within 5-10 seconds or so.&nbsp; <br>
+  </li>
+  <li>Bring up the WFS Configuration window and click 'Home WFS' to
+home and initialize the system. It is not strictly necessary to do this
+after a partial shutdown, but it doesn't hurt to do it. <br>
+  </li>
+  <li>After the WFS is homed, click on the appropriate button to set
+the stage motors to either the Hecto or MegaCam default
+configuration.&nbsp; Once that's done, the WFS Configuration window can
+be closed. <br>
+  </li>
+  <li>Bring up the PixelLink window and take an exposure to test
+communication with that camera.&nbsp; Likewise, take a test exposure
+with the WFS camera to make sure it's working properly as well. The
+PixelLink window can be left open for later use or closed and brought
+back up from the menu as needed. <br>
+  </li>
+</ul>
+<h3>Start-up Procedure after Full Shutdown</h3>
+<ul style="text-align: left;">
+  <li>Check to make sure the UPS and Pulizzi switches in 2nd floor
+      instrument lab are plugged in and turned on.  The two Pulizzi
+					switches used for the WFS are
+					P5-5 labeled "WFS CTRL AC"
+					(WFS computer power) and
+					P7-3 labeled "WFS DRV AC" (WFS
+					drive power).
+					Also make sure the ESTOP power
+					is on (switch P5-4 labeled
+					"ESTOP 24V"). 
+  <li>Bring up the F/5 wavefront sensor interface from the MMTO menu.</li>
+  <li>There will be an error message about failing to connect to the
+WFS computer.&nbsp; That is fine.&nbsp; Bring up the Power window and
+click the button for WFS Computer Power.&nbsp; Wait for a few
+minutes for the WFS computer to finish booting up and then click the
+button for WFS Drive Power. You can run '<span
+ style="font-family: monospace;">ping f5wave</span>' in a window to
+monitor when it comes alive and on the network.  If the buttons in the GUI do not respond, you can go up to the 2nd floor instrument lab and turn things on and off manually.<br>
+  </li>
+  <li>Once the WFS computer is back on-line, bring up WFS Computer from
+the Control menu or run '<span style="font-family: monospace;">vncviewer
+f5wave:0</span>' to bring up the VNC console window.&nbsp; Contact T.
+Pickering if you need the VNC password.&nbsp; When the VNC window comes
+up there will likely be a couple of dialogs complaining about new USB
+hardware and enabling automatic updates.&nbsp; Cancel out of all of
+those. <br>
+  </li>
+  <li>Once you get rid of those pop-ups, double-click on the Cygwin
+icon, run the command '<span style="font-family: monospace;">cd
+src/waveserv</span>' in the resulting window, and then run the command '<span
+ style="font-family: monospace;">wish waveserv.tcl</span>'.&nbsp; A
+small window should pop up that says 'waveserv' and has an exit button.
+    <br>
+  </li>
+  <li>After starting <span style="font-family: monospace;">waveserv</span>,
+you will likely need to wait several minutes or so before bringing up
+the <span style="font-family: monospace;">wavecamr</span>
+server.&nbsp; After the wait, double-click on the Cygwin icon once
+again, run '<span style="font-family: monospace;">cd src/waveserv</span>',
+and then run '<span style="font-family: monospace;">wish wavecamr.tcl</span>'.&nbsp;
+If you get an error, click 'ok', wait a few more minutes, and then try
+again.&nbsp; If it doesn't come up after several tries, you may need to
+shutdown, cycle power, and then start over. <br>
+  </li>
+  <li>Once the <span style="font-family: monospace;">waveserv</span>
+and <span style="font-family: monospace;">wavecamr</span> servers are
+running happily on the WFS computer, you can close the VNC
+window.&nbsp; Then open the Power window and power on the WFS
+subsystems in the following order: SBIG, Puntino, Encoder, and then
+Servo.&nbsp; Finally, turn on cooling for the WFS Camera and follow the
+rest of the start-up procedure for a partial shutdown.</li>
+</ul>
+<h3>Observing Procedure</h3>
+<div style="text-align: left;">
+<ul>
+  
+  <li>The F/5 WFS is more sensitive than the F/9 one so you shouldn't
+  need to go any brighter than 9th magnitude for a WFS star unless the
+  seeing or conditions are quite bad or focus is so poor that the star
+  is not visible on the PixelLink.&nbsp; Even a 9th magnitude star can
+  cause spots to be saturated in 5 second exposures in good seeing so
+  it is best to stick with 9.5 or fainter in most circumstances.&nbsp;
+  The WFS system is also most sensitive in the red so that a 9.5 mag K
+  or M star will be a lot brighter than one of type A or B.&nbsp; <br>
+  </li>
+  
+  <li>The WFS motion stages can be safely moved while the telescope is
+  slewing.&nbsp; In fact, the WFS Catalog GUI will automatically put
+  the WFS on axis when you command it to go to a WFS star and then
+  stow it when you use it to return to original catalog
+  coordinates.&nbsp; <br> </li>
+  
+  <li>When you're on axis and on a WFS star, take a PixelLink image to
+  check the star's position.&nbsp; The center of rotation is at
+  (650,688) in the image.&nbsp; If the star is not at that position,
+  go to the Observe menu at the top right of the DS9 window and click
+  'Init Pointing'.&nbsp; Move the red circle to center it on the star
+  and then click OK.&nbsp; This will attempt move the hexapod to place
+  the star on the center of rotation.&nbsp; Take another PixelLink
+  image to check the move, if desired.&nbsp; I find that it usually
+  takes a few iterations to get the hexapod to put the star where it
+  needs to go.&nbsp; Hopefully this will improve with time.&nbsp; The
+  PixelLink has a very fine plate-scale of 0.04"/pixel so the
+  centration doesn't need to be perfect.&nbsp; Once the star is at or
+  near enough to the center of rotation, go ahead and take WFS
+  frames. <br> </li>
+  
+  <li>Analyzing F/5 WFS data is very similar to the F/9 setup.&nbsp; I
+  recommend doing an iteration or two of correcting focus and coma
+  before doing an iteration or two (or three) of correcting the
+  primary.&nbsp; Focus can be determined fairly accurately with a
+  single image (it is determined from the grid spacing of the spot
+  pattern).&nbsp; Correcting coma benefits from doing at least 10-15
+  seconds of total integration (e.g., three 5 second exposures).&nbsp;
+  Total integration times of 20-30 seconds (e.g. three 10 second
+  exposures) are recommended when correcting the primary.&nbsp; If the
+  corrections do not converge well after 2 or 3 iterations, try longer
+  exposure times or average more images (e.g. five 10 second
+  exposures).&nbsp; This is especially true if you notice bulk
+  image-to-image movements of the spot pattern.&nbsp; This is
+  indicative of large scale, low frequency turbulence that can result
+  in spurious measurements of astigmatism.&nbsp; If the thermal system
+  is running well, the primary corrections should be fairly small and
+  you shouldn't have to clear forces before doing WFS
+  corrections.&nbsp; If you make large corrections of spherical or
+  other high order terms early in the night, it is usually worth going
+  back to WFS after a few hours to see if they need to be taken back
+  out.&nbsp; Spherical aberration, for example, tracks very closely
+  with radial temperature gradients in the primary's
+  front-plate.&nbsp; <br> </li>
+
+  <li>
+  How good the WFS corrections need to be depends a lot on the
+  conditions and what the observing program requires.  The diffraction
+  image and bar graphs in the wim window are useful image quality
+  references.  The most useful bar is the black one on the right, the
+  total RMS wavefront error.  Under good conditions it's worth
+  shooting for 150-200 nm total RMS.  If the seeing is worse than 1",
+  it's generally not worth spending extra time to get it better than
+  250 nm.  
+  </li>
+  
+  <li>When you're done taking data and making corrections, stow the
+  WFS stage.&nbsp; The WFS Catalog GUI will do this for you when you
+  hit the 'Return' button.
+  </li>
+</ul>
+<h3 style="text-align: center;">Partial Shutdown Procedure (If there is
+no chance at all of lightning)</h3>
+<ul>
+  <li>Make sure the WFS is stowed. <br>
+  </li>
+  <li>Turn off the WFS camera cooling.&nbsp; It takes about 15 minutes
+or so for it to warm back up to ambient.</li>
+  <li>Bring up the Power window and turn off the Servo power. <br>
+  </li>
+  <li>Leave everything else powered up and exit the WFS
+interface.&nbsp; You don't need to keep the interface open for the WFS
+camera to warm itself back up properly.</li>
+</ul>
+<h3 style="text-align: center;">Full Shutdown Procedure</h3>
+<ul>
+  <li>Make sure the WFS is stowed.</li>
+  <li>Turn off the WFS Camera cooling.&nbsp; Try to give this as much
+time as possible to avoid thermally stressing the CCD camera.&nbsp; At
+least 15 minutes is preferable, but it helps a lot if you can give it a
+even just a few minutes.</li>
+  <li>After giving the WFS camera as much time as possible to warm up,
+bring up the Power window and turn the subsystems off in this order:
+Servo, Encoder, Puntino, and SBIG.</li>
+  <li>After the WFS subsystems are powered down, bring up the WFS
+Computer VNC session and click the Exit button for the <span
+ style="font-family: monospace;">wavecamr</span> server first and then
+for <span style="font-family: monospace;">waveserv. <br>
+    </span></li>
+  <li>Close the Cygwin windows, click Start, and select 'Turn Off
+Computer'.&nbsp; Then click 'Turn Off'.&nbsp; The VNC window will
+disappear immediately, but it will take 10-20 seconds for the computer
+to be completely shutdown and powered off.&nbsp; <br>
+  </li>
+  <li>Once the WFS Computer is safely powered down, go to the Power
+window and turn off WFS Drive Power and WFS Computer Power. <br>
+  </li>
+</ul>
+<br>
+</div>
+</div>
+</div>
+</div>
+</body>
+</html>

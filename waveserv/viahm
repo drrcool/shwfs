@@ -1,0 +1,21 @@
+#/bin/sh
+# \
+exec wish C:/cygwin"$0" ${1+"$@"}
+
+package require viahm
+
+viahm::init
+
+  grid 	[label .l -text "CPU Temp:"]	\
+	[entry .t -width 4 -state disabled -textvariable T]
+
+proc temp {} {
+	global T;  
+	set T [viahm::Tsens1];  
+	after 1000 temp 
+}
+
+temp
+
+
+

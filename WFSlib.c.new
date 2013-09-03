@@ -1,0 +1,290 @@
+/* WFSlib() is a collection of math routines that are needed to reduce
+ * wavefront sensor data.  scw: 4-16-99 ; update 8-17-00*/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include "zernike.h"
+#include "WFSlib.h"
+#include "optics.h"
+#include "nrutil.h"
+
+/* createGradientMatrix() receives a set of M dimensionless x,y pupil sampling
+ * points.  It also receives a pointer to the matrix array that the calling
+ * routine wishes filled with this matrix. Note that the calling routine is
+ * responsible for finding the dimensionless pupil coords, and setting up
+ * and passing the appropriate array dimensions. [A] is a 2M x ZPOLY
+ * array. It has 2M rows because the individual x and y partitions are
+ * stacked onto each other. */
+
+
+void createGradientMatrix(float **A, float **xy, int M)
+{
+  int i,j;
+  
+  /* Note that this matrix will include the piston term which is zero, and
+   * provides no information for the solution--it may have to be removed
+   * */
+
+  for (i=1;i<=M;i++)
+    for (j=1;j<=ZPOLY;j++)
+      {
+	A[i][j] = duZdx(j, xy[i][1], xy[i][2]);
+	A[i+M][j] = duZdy(j, xy[i][1], xy[i][2]);
+      }
+
+}
+
+/* createPhaseMatrix() evaluates the Zernike phase at a series of
+ * dimensionless xy points (which are coords of hartmann aperture
+ * locations).  It returns [A] which is an M x ZPOLY matrix. */ 
+
+ void createPhaseMatrix(float **A, float **xy, int M)
+ {
+   int i, j;
+
+   for (i=1; i<=M; i++)
+     for (j=1; j<=ZPOLY;j++)
+       A[i][j] = uZ(j, xy[i][1], xy[i][2]);
+
+ }
+
+/* createPhaseVector takes a ZPOLY vector of Zernike coeffs and evaluates
+ * them at 'n'  x,y points.  It returns a vector 'ph_out' of length n.
+ * NOTE: xy, must be converted to dimensionless coords. mask is a ZPOLY
+ * vector of 1 and 0 telling which zcoeffs to use in the phase vector. */
+
+void createPhaseVector(float *zcoeff, float **xy, int n, float *ph_out,
+		       int *mask ) 
+{ 
+  int i,j;
+  float sum;
+
+  for (i=1;i<=n;i++)
+    {
+      sum=0;
+      for (j=1;j<=ZPOLY;j++)
+	if (mask[j] == 1)
+	  sum += zcoeff[j] * uZ(j, xy[i][1], xy[i][2]);
+      
+      ph_out[i] = sum;
+    }
+
+}
+/* phaseRMS() takes a list of 'nr' (xy) pairs, a poly_mask string, and a
+ * pointer to ZPOLY floats to hold the return rms values.  The routine
+ * calculates the rms phase error from each non-masked zernike mode over
+ * the coordinates given.  It returns the rms values for each mode using
+ * the supplied *rms. */
+
+void phaseRMS (float **xy, int nr, float *zcoeff, float *rms)
+{
+  int i,j, *mode;
+  float psum, *ph_out, sum, sum2, mean;
+
+  ph_out = vector(1, nr);
+  mode = ivector (1, ZPOLY);
+
+  for (i=1; i<=ZPOLY;i++)
+    {
+      mode [i] = 0;	/* set all mode masks to zero */
+      rms[i] = 0;		/* initialize rms output */	
+    }
+
+  for (i=1;i<=ZPOLY;i++)		/* cycle through the modes */
+    {
+      mode[i] =1;		/* unmask the individual mode */
+      /* call createPhaseVector for the individual polynomial mode */
+      createPhaseVector (zcoeff, xy, nr, ph_out, mode);
+
+      sum = sum2 = 0;
+      for (j=1;j<=nr;j++)
+	{	sum += ph_out[j]; sum2 += ph_out[j] * ph_out[j]; }
+
+      mean = sum/nr;
+      rms[i] = sqrtf (sum2/nr - 2*mean*mean + mean*mean);
+
+      mode[i] = 0;	/* re-mask this mode */
+    }
+
+  free_vector (ph_out, 1, nr);
+  free_ivector (mode, 1, ZPOLY);
+}
+
+ 
+/* Mtv() multiplies a matrix and a vector and outputs the new vector. [m]
+ * is mr x mc, (v) is mc, and (vout) is mr. */
+
+void Mtv (float **m, int mr, int mc, float *v, float *vout)
+{
+  int i, j;
+  float sum;		/* summing register */
+
+  for (i=1;i<=mr;i++)
+    {
+      sum = 0;
+      for (j=1;j<=mc;j++)
+	sum += m[i][j] * v[j];
+
+      vout[i] = sum;
+    }
+}
+
+/* associateSpots() takes two x,y centroid files (of lengths m1 and m2) and
+ * determines which spots from each file are created by the same phase
+ * apertures.  It returns a matrix 'link' whose first column is the 
+ * the spot number from the first file (c1) and whose second column is the
+ * index of the associated spot from c2.  Note that rows(link) will usually
+ * be < rows(c1) because if the spot is not in both files , it is thrown
+ * out.  link is the return array where its columns are indices to
+ * corresponding spots in c1 and c2 -- and l is its size. The routine
+ * assumes that both centroid files have been properly offset and magnified
+ * so that the physical coordinates correspond.  NOTE: for consistency, make
+ * sure that c1 is the system file and c2 is the stellar file. */
+
+void associateSpots(float **link, int *l, float **c1, int m1, 
+		    float **c2, int m2)
+{
+
+  float rmin,		/* holder for smallest spot separation */
+    dr;		        /* holder for current spot separation */
+
+  float	  tlink[m1+1], /* tmp link array that is discontinous */
+    used[m2+1];	       /* denote which c2 spots have already been used --
+			  remember that c2 and c1 are 1-based while c 
+			  creates a zero-based vector here! */
+
+  int i,j,cnt,	       /* vector indices and counters*/
+    lnk;	       /* hold index of c2 link to c1 for current spot in c1 */
+
+  for (i=1;i<=m1;i++)			/* loop through stellar spots */
+    {
+      /* assign rmin and link to first spot in c2 */
+      rmin = sqrtf ( pow(c1[i][1]-c2[1][1],2) + pow(c1[i][2]-c2[1][2],2) );
+      lnk = 1;		/* c2 index reference to closest spot in c1 */		
+      /* loop through c2 spots and find the closest to the c1 spot */
+      for (j=2;j<=m2;j++)	/* loop through c2--skipping first spot */
+	{
+	  dr = sqrtf (pow(c1[i][1]-c2[j][1],2) + pow(c1[i][2]-c2[j][2],2));
+	  if (dr<rmin && used[j] != 1) {rmin = dr; lnk = j;}
+	}
+
+      tlink[i] = -1;	/* set initially to no link */	
+
+      /* check to see if closest spot is actually made by the same phase
+       * apertures. tlink's index is the c1 spot #, and it's value is the
+       * c2 index or -1 if no match was found. */
+      if (rmin < lr) 
+	{tlink[i] = lnk; 	/* if valid link, save its index  */
+	used[lnk] = 1;}	/* and mark the spot as used */	
+    }
+
+  writeVector ("tlink", tlink, m1);
+
+  /* now create a continuous link file by removing the non-linked data
+   * */
+  cnt = 1;
+  for (i=1;i<=m1;i++)
+    {
+      if (tlink[i] != -1) 
+	{ link[cnt][1] = i;				/* set c1 index */ 
+	link[cnt++][2] = tlink[i];	/* set corresponding c2 index */
+	}
+    }	
+
+  *l = cnt - 1;	/* return the size of the link array to the caller */
+				
+}
+
+/* psf.c was adapted by Don Fisher from my earlier program ihc.c. It's
+ * optimized for a single aperture telescope, and will show images with a
+ * detector shift relative to the nominal focus.  It uses monochromatic
+ * light only. It takes lists of wavefront coordinates (in physical
+ * units--i.e. not dimensionless) and phases at each location.  It then
+ * returns an array of intensities in CCD pixel elements that contain the
+ * psf image information. 
+
+/* assume the (x,y) coordinates for both the wavefront points and detector
+ * pixels are signed offsets from the Z axis of the optical system. The
+ * phase values given are in um (half wave in either direction) with 0 phase
+ * shift + separation = detector_z.
+ */
+
+/* NOTE: this routine has zero-based arrays, so when sending information
+ * from 1-based arrays, send pointer &array[1] rather than "array". */
+
+#define sag(w,R) (R - sqrtf(R * R - w * w))
+
+int psf(float focus_dist_z, /* wavefront focus distance - to hartman
+				   mask (um). Just the effective focal 
+				   length. */
+	 float ds,	     /* shift of detector from focal plane (um). */
+	 float wavelength,   /* wavelength of light in um. */
+	 int ap_count,	     /* number of points in our wavefront. */
+	 float *phase,	     /* wavefront phase at each location (um). */
+	 float *ap_x,        /* (x,y) coodinates of each aperture */
+	 float *ap_y,        /* at wavefront (um). */ 
+	 int det_count,     /* number of pixels that make up our detector. */
+	 float *det_amp,     /* intensity at each pixel coordinate. */
+	 float *det_x,       /* (x,y) coordinates of each pixel in the */
+	 float *det_y)	     /* image in um. */
+{
+  int i, j;	      /* looping indices */
+  float dx, dy, dz;  /* image coordinates (um). */
+  float s;	      /* OPD from point on wavefront to detector. */
+  float fracWave;    /* fractional wavelengths in OPD. */
+  float xphase, yphase;  /* vector phases corresponding to OPD. */
+  float *px_sum, *py_sum; /* sum of the phases in x and y at each pixel. */
+  
+  /* For each wavefront phase, sum its contribution to the phase in each
+   * detector of the image.  */
+
+  /* calloc inits the summing array to zero */  
+  px_sum = (float *)calloc(det_count, sizeof(float));
+  py_sum = (float *)calloc(det_count, sizeof(float));
+
+  for(i = 0; i < ap_count; i++){
+    dz = focus_dist_z + ds + phase[i] - 
+      sag(hypotf(ap_x[i], ap_y[i]), focus_dist_z);
+    for(j = 0; j < det_count; j++){
+
+      /* compute the OPL from aperture (i) to pixel (j) on the detector */
+
+      /* delta in x from ap coord to pixel coord (um) */
+      dx = ap_x[i] - det_x[j];
+      /* delta in y from ap coord to pixel coord (um) */
+      dy = ap_y[i] - det_y[j];				 
+      s = sqrtf(dx * dx + dy * dy + dz * dz);		    /* OPL */
+
+      fracWave = fmodf(s, wavelength) / wavelength;
+      xphase = cosf(2.0 * M_PI * fracWave);
+      yphase = sinf(2.0 * M_PI * fracWave);
+      px_sum[j] += xphase;
+      py_sum[j] += yphase;
+    }			   /* loop over the detector elements. */
+  }			   /* loop over the wavefront apertures. */
+
+  /* ---------------------------------------------------------------
+   * replace xbins with intensities and sum into top detector layer.
+   * neglect interference terms.
+   * -------------------------------------------------------------*/
+
+  {
+    float temp;
+    
+    for(j = 0; j < det_count; j++){
+      temp = hypotf(px_sum[j], py_sum[j]);
+      det_amp[j] = temp * temp;				    /* square it. */
+    }
+  }
+  printf("det amp = %f", det_amp[50]);
+  free(px_sum);
+  free(py_sum);
+  return(1);
+}
+
+
+		
+			
+			
+			

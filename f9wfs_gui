@@ -1,0 +1,267 @@
+#!/usr/bin/ruby
+
+# This runs the f9 WFS GUI (to take manual exposures)
+# It also launches the catalog GUI
+#
+# tjt 2-25-2011 made changes
+# inspects WFSROOT variable and sets the path variable internally
+# inspects WFSDEBUG environment variable and takes actions.
+#
+# As of ruby 1.9 (and Fedora 17), the soap package is no
+# longer available as an RPM via yum, you must do:
+# gem install soap4r-ruby1.9 	8-3-2012
+
+require 'libglade2'
+require 'thread'
+
+# As of Ruby 1.9 this package spits out:
+# iconv will be deprecated in the future, use String#encode instead.
+# so we suppress this warning while we wait for an upstream fix.
+save_verbose=$VERBOSE; $VERBOSE=nil
+require 'soap/rpc/driver'
+$VERBOSE=save_verbose
+
+### define the main GUI window
+class MainWindow
+
+  def initialize(inst,root,debug)
+    @inst = inst
+    @path = root
+    @dir = @path + "/datadir"
+    @debug = debug
+
+    require @path + "/wfscat.rb"
+
+    @glade = GladeXML.new("#{@path}/glade/f9wfs_gui.glade") {|handler| method(handler)}
+    @mirror_text = @glade.get_widget("CompStatus")
+    @mirror_button = @glade.get_widget("CompMirror")
+
+    @lampserver = SOAP::RPC::Driver.new("http://hacksaw.mmto.arizona.edu:7851", "urn:Lamp")
+    @lampserver.options["protocol.http.receive_timeout"] = 120
+    @lampserver.add_method("set_mirror_exclusive", "mirror")
+    @lampserver.add_method("get_mirror")
+    @lampserver.add_method("wait_mirror")
+
+    get_mirror
+
+    Thread.new {
+      while @lampserver
+	get_mirror
+	sleep(5)
+      end
+    }
+
+    @mainwindow = @glade.get_widget("MainWindow")
+    @mainwindow.set_title("F/9 WFS Interface for #{@inst}")
+    @status = @glade.get_widget("StatusBar")
+    @menubar = @glade.get_widget("menubar1")
+
+    unless @debug
+	@catalog = WFSCat.new(self)
+    end
+
+    @automirror = true
+
+    # exposure configuration
+    @expose = @glade.get_widget("Expose")
+    @nexp = @glade.get_widget("NExp")
+    @exptime = @glade.get_widget("ExpTime")
+    @fileentry = @glade.get_widget("FileEntry")
+  end
+
+  # get mirror status and display it
+  def get_mirror
+    status = @lampserver.get_mirror
+    if !status || status =~ /X/
+      status = "UNKNOWN"
+    end
+    @mirror_text.set_markup("is: <b>#{status}</b>")
+    if status =~ /IN/
+      @on_axis = true
+    else
+      @on_axis = false
+    end
+    @mirror_stat = status
+  end
+
+  # are we on axis?
+  def on_axis?
+    return @on_axis
+  end
+
+  # kill the main window on a destroy
+  def on_MainWindow_destroy
+    Gtk.main_quit
+  end
+
+  # bring up catalog window
+  def on_wfs_catalog1_activate
+    unless @catalog
+      @catalog = WFSCat.new(self)
+    end
+  end
+
+  # clean up catalog pointer
+  def killcat
+    @catalog = nil
+  end
+
+  # handle toggling of comp mirror control
+  def on_CompToggle_toggled
+    if @automirror
+      @automirror = false
+      report("Automatic Comp Mirror control disabled.")
+    else
+      @automirror = true
+      report("Automatic Comp Mirror control enabled.")
+    end
+  end
+
+  # handle comp mirror click
+  def on_CompMirror_clicked
+    get_mirror
+    if @mirror_stat =~ /IN/
+      Thread.new {
+        move_mirror("out")
+      }
+    end
+    if @mirror_stat =~ /OUT/
+      Thread.new {
+        move_mirror("in")
+      }
+    end    
+  end
+
+  def move_mirror(dir)
+    report("Moving Comp Mirror....")
+    @mirror_button.set_sensitive(false)
+    @mirror_stat = "BUSY"
+    @mirror_text.set_markup("is: <b>#{@mirror_stat}</b>")
+    @lampserver.set_mirror_exclusive(dir)
+    get_mirror
+    @mirror_button.set_sensitive(true)
+    report("Move completed.")
+  end
+
+  # handle call to put comp mirror on axis
+  def on_OnAxis_clicked
+    if @automirror
+      get_mirror
+      if @mirror_stat =~ /OUT/
+        Thread.new {
+          move_mirror("in")
+        }
+      end
+    else
+      return
+    end
+  end
+
+  # handle call to stow comp mirror
+  def on_StowWFS_clicked
+    if @automirror
+      get_mirror
+      if @mirror_stat =~ /IN/
+        Thread.new {
+          move_mirror("out")
+        }
+      end
+    else
+      return
+    end
+  end
+
+  # routine to print to statusbar
+  def report(text)
+    @status.pop(0)
+    @status.push(0, text)
+  end
+
+  # menubar callbacks
+  def on_quit_activate
+    Gtk.main_quit
+  end
+
+  def on_about1_activate
+    report("First cut at a remote f/9 WFS interface")
+  end
+
+  # configure and take exposure
+  def on_Expose_clicked
+    nexp = @nexp.value_as_int
+    exptime = @exptime.value.to_f
+    file = @fileentry.text
+    t = Thread.new {
+      @expose.set_sensitive(false)
+      n = 1
+      nexp.times {
+
+	# figure out the filename
+	if file == "test"
+	  fullfilename = "#{@dir}/#{file}.fits"
+	  filename = "#{file}.fits"
+	  system("rm -f #{@path}/datadir/#{filename}")
+	else
+	  num = 0
+	  fullfilename = sprintf("%s/%s_%04d.fits", @dir, file, num)
+	  filename = sprintf("%s_%04d.fits", file, num)
+#	  while test(?e, fullfilename) 
+	  while test(?e, "#{@path}/datadir/#{filename}") 
+	    num = num + 1
+	    fullfilename = sprintf("%s/%s_%04d.fits", @dir, file, num)
+	    filename = sprintf("%s_%04d.fits", file, num)
+	  end
+	end
+
+	if exptime > 1
+	  count = Thread.new {
+	    left = exptime.to_i
+	    left.times {
+	      report("Exposing \##{n} (#{filename})...#{left} sec left.")
+	      sleep(1)
+	      left = left - 1
+	    }
+	    report("Reading out \##{n} (#{filename})....")
+	  }
+	else
+	  report("Exposing \##{n} (#{filename})....")
+	end
+
+	system("sudo -u mmtop /usr/bin/rsh -n -l tim f9wfs \"/home/tim/get_apogee_image.tcl #{exptime} #{filename} \> /dev/null\"")
+	system("sudo -u mmtop /usr/bin/rcp tim@f9wfs:/home/tim/#{filename} #{fullfilename}")
+	system("sudo -u mmtop /usr/bin/rsh -n -l tim f9wfs \"rm -f #{filename} \> /dev/null\"")
+	system("sudo -u mmtop chmod g+w #{fullfilename}")
+	system("#{@path}/header.pl #{@path}/datadir/#{filename} #{exptime} F9")
+	system("/usr/bin/xpaset -p WFS file #{@path}/datadir/#{filename}")
+
+	n = n + 1
+      }
+      if nexp == 1 
+	report("Completed Exposure.")
+      else 
+	report("Completed Exposures.")
+      end
+      @expose.set_sensitive(true)
+    }
+  end
+
+end
+
+# Single command lineargument - F9 or F5 or some such
+debug = false
+root = "/mmt/shwfs"
+
+if ENV.has_key? 'WFSDEBUG'
+    debug = true
+end
+
+if ENV.has_key? 'WFSROOT'
+    root = ENV['WFSROOT']
+end
+
+# get the ball rolling!
+Gtk.init
+MainWindow.new(ARGV[0],root,debug)
+Gtk.main
+
+# THE END

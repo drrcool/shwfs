@@ -1,0 +1,25 @@
+
+open program TMoveProgram
+ ProgramInit(T)
+ ChekDesired(T)
+
+ if ( CHFlag = 1 and TDesired < -275.0 )
+    if ( CHomed = 0 )
+	PrgError(ErrCNotHomed)
+    endif
+
+    CAxisPos = AxisPos(C)
+
+    if ( CAxisPos < 0 )
+	PrgError(ErrCNotOnFlag)
+    endif
+ endif
+
+ ReleaseBrak(T)
+
+ Move(T, TDesired) 
+ WaitForInPosition(T)
+
+ RestoreBrak(T)
+ ProgramDone(T)
+close

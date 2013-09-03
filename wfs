@@ -1,0 +1,19 @@
+#!/bin/sh
+
+#export WFSROOT=/home/tom/shwfs
+export WFSROOT=/mmt/shwfs
+export WFSDEBUG=postmortem
+
+if [ -e datadir/F9 ]
+then
+	echo "F9 data found"
+	#exec /home/tom/shwfs/shwfs_unified.tcl F9 Blue &
+	exec /mmt/shwfs/shwfs_unified.tcl F9 Blue &
+elif [ -e datadir/F5 ]
+then
+	echo "F5 data found"
+	#exec /home/tom/shwfs/shwfs_unified.tcl F5 Hecto &
+	exec /mmt/shwfs/shwfs_unified.tcl F5 Hecto &
+else
+	echo "I dunno what is up!?"
+fi

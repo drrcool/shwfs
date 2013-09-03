@@ -1,0 +1,51 @@
+; # PMAC Motor Initialization File.
+; # C Axis
+;
+#define CAxisLetter	   Z
+#define CMotor		   3
+#define CScale		2000
+
+&3
+:#:CMotor->+CScale:CAxisLetter+0
+
+#define CMLimitHomeTrig	2
+#define CPLimitHomeTrig	2
+#define CHomeAgainst	0
+#define CHomeFlagTrig	2
+
+p90=	 -122.000		; WFS Camera Position
+p91=	   18.000		; Sci Camera Position
+
+
+i300=1		; Axis Enable
+i325=$10C008	; Axis Feedback/Amp enable
+i910= 3		; Default Encoder Q Counts - Reverse
+
+CHomed = 0
+
+p301=       1			; Axis Flip
+p302=      25.000		; Home Speed  mm/sec
+p303=      -1   		; Home Offset mm
+p304=      -1			; Home Direction 
+p305=      25.000		; Feed Rate  mm/sec
+p306=     200			; Acc Time   msec
+p307=      50			; Acc SCurve msec
+p308=       0.005 		; Position Tolerance mm
+p309=       5.000            	; Limit Nudge mm
+
+i311=       0.50*CScale*16     	; Following Error 1/16 count
+i312=       0                 	; Following Warning 1/16 count
+i315=       5		  	; Error Deceleration Rate counts/msec2
+i316=      25.00*CScale/1000  	; Maximum Velocity counts/msec
+i317=        .25		; Maximum Acceleration counts/msec2
+
+i330=   50000                 	; Proportional Gain 
+i331=     600                 	; Derivitive Gain 
+i332=     600                 	; Velocity Feed Forward 
+i333=   30000                 	; Integral Gain 
+i334=       1                 	; Integral Mode 
+i363=   20000                 	; Integration Limit 1/16 count
+i364=       0                 	; Dead Band Factor 
+i365=       0                 	; Dead Band Size 1/16 counts
+i367=    8000                 	; Big Step Limit 1/16 count
+i395=    6576                 	; Hold Decel Rate 2^-23msec/servo

@@ -1,0 +1,18 @@
+/* Program Numbers
+ */
+#define XMMovProgram	1001
+#define ClearState	1100
+#define DummyProgram	1200
+#define ErrorProgram	1111
+
+#define CAxisTagUp	1300
+
+#define MHomeProgram	200:MMotor
+#define THomeProgram	200:TMotor
+#define CHomeProgram	200:CMotor
+#define FHomeProgram	200:FMotor
+
+#define MMoveProgram	300:MMotor
+#define TMoveProgram	300:TMotor
+#define CMoveProgram	300:CMotor
+#define FMoveProgram	300:FMotor

@@ -1,0 +1,10 @@
+
+open program CAxisTagUp
+    Clear
+
+    HomeInit(C)
+    HomeToLimit(C, M)
+    HomeToFlags(C)
+
+    HomeDone(C)
+close 

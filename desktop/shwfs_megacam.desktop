@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=F/5 Wavefront Sensor for MegaCam
+Comment=F/5 Wavefront Sensor for MegaCam
+Exec=/mmt/shwfs/shwfs_unified.tcl F5 MegaCam
+Icon=/mmt/admin/desktop/shwfs_f5.png
+Terminal=true
+MultipleArgs=false
+Type=Application
+Encoding=UTF-8
+X-Desktop-File-Install-Version=0.3
+Categories=Application;MMT;WFS;

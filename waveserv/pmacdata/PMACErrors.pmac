@@ -1,0 +1,23 @@
+/* PMAC Error codes.
+ */
+#define	ErrLimits	 1
+#define	ErrFolErr	 2
+#define ErrRTError	 3
+#define ErrNotRunning	 4
+#define	ErrStopLim	 5
+#define	ErrLimitAtHome 	 6
+#define	ErrTimeout 	 7
+#define ErrNotHomed 	 8
+#define ErrEStop 	 9
+#define ErrServoPower 	10
+#define ErrCNotOnFlag 	11
+#define ErrTNotHomed 	12
+#define ErrTNotCentered	13
+#define ErrBrakTimedOut	14
+#define ErrEncoderPower	15
+
+#define ErrProgTimeout	16
+
+#define ErrMoveRange	17
+#define ErrCNotHomed	18
+

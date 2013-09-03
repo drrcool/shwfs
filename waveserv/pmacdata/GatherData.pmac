@@ -1,0 +1,19 @@
+/* Gather Registers
+ */
+
+i19=100
+i20=$FFF	; All Motors 
+i21=$C0002B	; M Actual		 0
+i22=$C00028	; M Commanded
+i23=$C00067	; T Actual		 2
+i24=$C00064	; T Commanded
+i25=$C000A3	; C Actual		 4
+i26=$C000A0	; C Commanded
+i27=$C000DF	; F Actual		 6
+i28=$C000DC	; F Commanded
+
+i29=$400045	; M Command Output	 8
+i30=$400081	; T Command Output	 9
+i31=$4000BD	; C Command Output	10
+i32=$4000F9	; F Command Output	11
+

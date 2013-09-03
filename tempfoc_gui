@@ -1,0 +1,147 @@
+#!/usr/bin/ruby
+
+require 'libglade2'
+require 'thread'
+require 'timeout'
+require 'socket'
+require '/mmt/shwfs/msg.rb'
+
+### define the main GUI window
+class MainWindow
+  include MSG
+
+  def initialize(mode)
+    @mode = mode
+    @hostname = "hacksaw"
+
+    if ENV['WFSROOT']
+      @path = ENV['WFSROOT']
+      @dir = "#{@path}/datadir"
+    else
+      @path = "/mmt/shwfs"
+      @dir = "/mmt/shwfs/datadir"
+      @netdir = "/net/#{@hostname}/home/mmt/shwfs/datadir"
+    end
+
+    @glade = GladeXML.new("#{@path}/glade/tempfoc_gui.glade") {|handler| method(handler)}
+
+    @mainwindow = @glade.get_widget("MainWindow")
+    @mainwindow.set_title("Tempfoc GUI")
+    @status = @glade.get_widget("StatusBar")
+    @menubar = @glade.get_widget("menubar1")
+
+    # exposure configuration
+    @expose = @glade.get_widget("Expose")
+    @nexp = @glade.get_widget("NExp")
+    @exptime = @glade.get_widget("ExpTime")
+    @fileentry = @glade.get_widget("FileEntry")
+    @fileentry.set_text("tempfoc")
+    @wfsock = sockopen("localhost", 6868)
+  end
+
+  # kill the main window on a destroy
+  def on_MainWindow_destroy
+    @wfsock.close
+    Gtk.main_quit
+  end
+
+  # routine to print to statusbar
+  def report(text)
+    @status.pop(0)
+    @status.push(0, text)
+  end
+
+  # menubar callbacks
+  def on_quit_activate
+    @wfsock.close
+    Gtk.main_quit
+  end
+
+  def on_about1_activate
+    report("First cut at a remote WFS interface")
+  end
+
+  # configure and take exposure
+  def on_Expose_toggled
+    if (@expose.active?)
+      @run = true
+      @expose.child.set_text("STOP")
+      nsleep = @nexp.value_as_int
+      exptime = @exptime.value.to_f
+      file = @fileentry.text
+      t = Thread.new {
+	n = 1
+	while @run do
+	  # figure out the filename
+	  if file == "test"
+	    fullfilename = "#{@dir}/#{file}.fits"
+	    zrnfilename = "#{@dir}/#{file}.cntr.sub.zrn"
+	    netfullfilename = "#{@netdir}/#{file}.fits"
+	    filename = "#{file}.fits"
+	    system("rm -f #{fullfilename}")
+	  else
+	    num = 0
+	    fullfilename = sprintf("%s/%s_%04d.fits", @dir, file, num)
+	    zrnfilename = sprintf("%s/%s_%04d.cntr.sub.zrn", @dir, file, num)
+	    netfullfilename = sprintf("%s/%s_%04d.fits", @netdir, file, num)
+	    filename = sprintf("%s_%04d.fits", file, num)
+	    while test(?e, fullfilename) 
+	      num = num + 1
+	      fullfilename = sprintf("%s/%s_%04d.fits", @dir, file, num)
+	      netfullfilename = sprintf("%s/%s_%04d.fits", @netdir, file, num)
+	      filename = sprintf("%s_%04d.fits", file, num)
+	    end
+	  end
+
+	  if exptime > 1
+	    count = Thread.new {
+	      left = exptime.to_i
+	      left.times {
+		report("Exposing \##{n} (#{filename})...#{left} sec left.")
+		sleep(1)
+		left = left - 1
+	      }
+	      report("Reading out \##{n} (#{filename})....")
+	    }
+	  else
+	    report("Exposing \##{n} (#{filename})....")
+	  end
+
+	  if (@mode == "F5")
+	    system("#{@path}/getimage #{exptime} #{fullfilename}")
+	  else
+            system("sudo -u mmtop /usr/bin/rsh -n -l tim f9wfs \"/home/tim/get_apogee_image.tcl #{exptime} #{filename} \> /dev/null\"")
+            system("sudo -u mmtop /usr/bin/rcp tim@f9wfs:/home/tim/#{filename} #{fullfilename}")
+            system("sudo -u mmtop /usr/bin/rsh -n -l tim f9wfs \"rm -f #{filename} \> /dev/null\"")
+            system("sudo -u mmtop chmod g+w #{fullfilename}")
+	  end
+	  system("#{@path}/header.pl #{fullfilename} #{exptime} #{@mode}")
+	  #system("/usr/bin/xpaset -p WFS file #{fullfilename}")
+	  report("Centroiding #{filename}....")
+	  msg_cmd(@wfsock, "centroid", "#{fullfilename}")
+	  if test(?e, zrnfilename)
+	    system("/mmt/shwfs/getm2info >> /mmt/shwfs/datadir/tempfoc.log")
+	    system("echo \"all\" | nc hacksaw 7692 | egrep 'cell_(time|e_tc)' | xargs >> /mmt/shwfs/datadir/tempfoc_cell.log")
+	  end
+	  report("Sleeping #{nsleep} seconds....")
+	  sleep(nsleep)
+	  n = n + 1
+	end
+	report("Completed Exposures")
+      }
+    else
+      @run = false
+      @expose.child.set_text("Take Exposures")
+    end
+  end
+
+end
+
+if !(ARGV[0] == "F5" || ARGV[0] == "F9")
+  puts "Specify F5 or F9."
+else
+  # get the ball rolling!
+  Gtk.init
+  MainWindow.new(ARGV[0])
+  Gtk.main
+end

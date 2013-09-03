@@ -1,0 +1,132 @@
+/* Encoder Following Errors in encoder table units (Scale *32).
+ */
+
+open program ClearState
+ clear
+
+    m1023=0
+    m41=0
+    m48=0
+    p99=0
+    p98=0
+close
+
+
+open plc 0
+ clear
+;  if ( EStop = 0 and EStopped = 1 )
+;	EStopped = 0
+;	cmd "enable plc6"
+;  endif
+
+;  if ( EStop = 1 and EStopped = 0 ) 
+;	EStopped = 1
+;	command "&1pmatch"
+;  endif
+close
+
+; This is PLC1 the PMAC initialization PLC program.
+; It sets up the PMAC State in DP RAM and starts the 
+; PLCs
+;
+open plc 1
+    clear
+
+    Done  = 0
+    Error = 0
+
+    EStopDP  = EStop
+    EStopped = 1
+
+    i48=1
+    i49=1
+    i59=8
+    command "gather"
+
+  enable plc 4
+  enable plc 5
+  ;enable plc 0
+
+  disable plc 1
+  i5=3
+close
+
+open plc 4
+ clear
+
+  if ( EncoderPower = 0 ) 
+	CHomed = 0
+	FHomed = 0
+  endif
+
+  if ( EStop = 0 ) 
+    if ( MOLop = 0 ) 
+    	command "&1A#1K"
+    endif
+    if ( TOLop = 0 ) 
+    	command "&2A#2K"
+    endif
+    if ( COLop = 0 ) 
+    	command "&3A#3K"
+    endif
+    if ( FOLop = 0 ) 
+    	command "&4A#4K"
+    endif
+  endif
+
+#define CheckLimitStuff(axis) 				\n\
+	if ( axis##PLimit = 1 and axis##MLimit = 1  ) 	\n\
+		axis##Homed = 0				\n\
+	endif						\n\
+	if ( axis##Check  = 1 ) 			\n\
+    	    BrakTimer = BrakTimeOut			\n\
+	    if ( axis##FolErr = 1 )			\n\
+		PLCError(ErrFolErr)			\n\
+	    endif					\n\
+	    if ( axis##StopLim  = 1 )			\n\
+		PLCError(ErrStopLim)			\n\
+	    endif					\n\
+	endif
+
+  CheckLimitStuff(M)
+  CheckLimitStuff(T)
+  CheckLimitStuff(C)
+
+
+  if ( BrakeOveride = 0 and BrakTimer < 0 ) 
+	MBrake = 0
+	TBrake = 0
+	CBrake = 0
+	FBrake = 0
+	;Error = ErrBrakTimedOut
+  endif
+close
+
+
+open plc 5
+ clear
+
+ if ( CopyDone = 0 )
+  EStopDP = EStop
+
+   BrakDP =  BrakeOveride
+  MBrakDP = MBrake
+  TBrakDP = TBrake
+  CBrakDP = CBrake
+  FBrakDP = FBrake
+
+  MPLimDP = MPLimit
+  TPLimDP = TPLimit
+  CPLimDP = CPLimit
+  FPLimDP = FPLimit
+
+  MMLimDP = MMLimit
+  TMLimDP = TMLimit
+  CMLimDP = CMLimit
+  FMLimDP = FMLimit
+
+  CopyDone = 1
+ endif
+close
+
+

@@ -1,0 +1,22 @@
+
+open program CHomeProgram
+ clear
+
+ if ( THomed = 0 )
+	PrgError(ErrTNotHomed)
+ endif
+
+ p0 = (TActual + TBias) / TScale
+ if ( p0 > 200 )
+	PrgError(ErrTNotCentered)
+ endif
+
+  HomeInit(C)
+
+  HomeToLimit(C, P)
+  HomeToLimit(C, M)
+
+  HomeToFlags(C)
+
+  HomeDone(C)
+close 

@@ -1,0 +1,71 @@
+; This is the PMAC Motion program for the MMT F5 Wavefront sensor.
+;
+/* I variables for communications:
+ */
+    I0=0
+    I1=0
+    I2=1
+    I3=2
+    I4=0
+    I5=0
+    I6=1
+    I9=2
+
+A
+close
+endgather
+delete gather
+define gather 6000
+&1
+i53=1
+
+/* Basic variable definitions
+ */
+#include "PMACAxisDefs.pmac"
+#include "PMACErrors.pmac"
+#include "PMACStates.pmac"
+
+/* Basic motor initializations
+ */
+#include <GatherData.pmac>
+
+#include <M.pmac>
+#include <T.pmac>
+#include <C.pmac>
+#include <F.pmac>
+
+; Now the actual PMAC Programs
+;
+#include "ProgramNum.pmac"
+
+#include <MHomeProgram.pmac>
+#include <THomeProgram.pmac>
+#include <CHomeProgram.pmac>
+#include <FHomeProgram.pmac>
+
+#include <MMoveProgram.pmac>
+#include <TMoveProgram.pmac>
+#include <CMoveProgram.pmac>
+#include <FMoveProgram.pmac>
+
+#include <CAxisTagUp.pmac>
+#include <DummyProgram.pmac>
+#include <ErrorProgram.pmac>
+
+#include <PLC.pmac>
+
+; No Delay in move start.
+;
+i11=0
+
+Done		= 0
+Error		= 0
+
+StowedSafe  	= 0
+BrakTimeOut 	= 5 * 60 / 0.000442
+
+; Start the Initialization PLC Programs
+;
+i5=3
+;enable plc 0
+enable plc 1

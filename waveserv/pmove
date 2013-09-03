@@ -1,0 +1,14 @@
+#/bin/sh
+# \
+exec tclsh $CYGROOT"$0" ${1+"$@"}
+
+package require msg	1.0
+package require try	1.0
+
+try {
+    set pos [lindex $argv 0]
+
+    msg_client WAVESERV
+    msg_cmd   WAVESERV "pmove $pos" 6000
+}
+

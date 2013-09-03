@@ -1,0 +1,47 @@
+; # PMAC Motor Initialization File.
+; # T Axis
+;
+#define TAxisLetter	   Y
+#define TMotor		   2
+#define TScale		1000
+
+&2
+:#:TMotor->+TScale:TAxisLetter+0
+
+#define TMLimitHomeTrig	2
+#define TPLimitHomeTrig	2
+#define THomeAgainst	0
+#define THomeFlagTrig	1
+
+i200=1		; Axis Enable
+i225=$10C004	; Axis Feedback/Amp enable
+i905= 3		; Default Encoder Q Counts
+
+THomed = 0
+
+p201=       1			; Axis Flip
+p202=      50.000		; Home Speed  mm/sec
+p203=      80.000   		; Home Offset mm
+p204=      -1			; Home Direction 
+p205=      50.000		; Feed Rate  mm/sec
+p206=     200			; Acc Time   msec
+p207=      50			; Acc SCurve msec
+p208=       0.005 		; Position Tolerance mm
+p209=      10.000            	; Limit Nudge mm
+
+i211=       1.0*TScale*16     	; Following Error 1/16 count
+i212=       0                 	; Following Warning 1/16 count
+i215=      10              	; Error Deceleration Rate counts/msec2
+i216=      50*TScale/1000      	; Maximum Velocity counts/msec
+i217=       0.5               	; Maximum Acceleration counts/msec2
+
+i230=   75000                 	; Proportional Gain 
+i231=     600                 	; Derivitive Gain 
+i232=     600                 	; Velocity Feed Forward 
+i233=   30000                 	; Integral Gain 
+i234=       1                 	; Integral Mode 
+i263=   20000                 	; Integration Limit 1/16 count
+i264=       0                 	; Dead Band Factor 
+i265=       0                 	; Dead Band Size 1/16 counts
+i267=    8000                 	; Big Step Limit 1/16 count
+i295=    6576                 	; Hold Decel Rate 2^-23msec/servo

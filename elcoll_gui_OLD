@@ -1,0 +1,329 @@
+#!/usr/bin/ruby
+
+require 'libglade2'
+require 'thread'
+require 'timeout'
+require 'socket'
+require '/mmt/shwfs/msg.rb'
+
+Thread.abort_on_exception = true
+
+### define the main GUI window
+class MainWindow
+  include MSG
+
+  def initialize(mode)
+    @mode = mode
+    @hostname = "hacksaw"
+
+    if ENV['WFSROOT']
+      @path = ENV['WFSROOT']
+      @dir = "#{@path}/datadir"
+    else
+      @path = "/mmt/shwfs"
+      @dir = "/mmt/shwfs/datadir"
+      @netdir = "/net/#{@hostname}/home/mmt/shwfs/datadir"
+    end
+
+    @glade = GladeXML.new("#{@path}/glade/elcoll_gui.glade") {|handler| method(handler)}
+
+    @mainwindow = @glade.get_widget("MainWindow")
+    @mainwindow.set_title("ElColl GUI")
+    @status = @glade.get_widget("StatusBar")
+    @menubar = @glade.get_widget("menubar1")
+
+    # exposure configuration
+    @expose = @glade.get_widget("Expose")
+    @elstep = @glade.get_widget("ElStep")
+    @azimuth = @glade.get_widget("Azimuth")
+    @fileentry = @glade.get_widget("FileEntry")
+    @fileentry.set_text("elcoll")
+    #
+    # Changed from "hoseclamp" to "localhost" so that this GUI can
+    # run on pipewrench or another TO computer.  JDG  2012-11-29
+    # @wfsock = sockopen("hoseclamp", 6868)
+    #
+    @wfsock = sockopen("localhost", 6868)
+
+    @telsock = sockopen("hacksaw", 5403)
+    @hexsock = sockopen("hexapod", 5350)
+
+    @el = 85.0
+    @step_sign = -1.0
+    system("touch #{@dir}/ELCOLL")
+  end
+
+  # kill the main window on a destroy
+  def on_MainWindow_destroy
+    @wfsock.close
+    @telsock.close
+    @hexsock.close
+    Gtk.main_quit
+  end
+
+  # routine to print to statusbar
+  def report(text)
+    @status.pop(0)
+    @status.push(0, text)
+  end
+
+  # menubar callbacks
+  def on_quit_activate
+    on_MainWindow_destroy
+  end
+
+  def on_about1_activate
+    report("First cut at a remote WFS interface")
+  end
+
+  # configure and take exposure
+  def on_Expose_toggled
+    if (@expose.active?)
+      @run = true
+      @expose.child.set_text("STOP")
+      azimuth = @azimuth.value.to_f
+      exptime = 5.0
+      step = @elstep.value.to_f
+      file = @fileentry.text
+      t = Thread.new {
+	while @run do
+	  # figure out HA and Dec from alt and az
+	  result = `#{@path}/wfscat/azel2radec #{azimuth} #{@el}`.split(' ')
+	  ha = result[0].to_f
+	  dec = result[1].to_f
+	  
+	  # get lst
+	  lst_hms = msg_get(@telsock, 'lst')
+	  lst = hms2deg(lst_hms)
+	  ra = lst - ha
+	  if (ra > 24.0)
+	    ra = ra - 24.0
+	  end
+	  if (ra < 0.0)
+	    ra = ra + 24.0
+	  end
+
+	  # now lets find the closest WFS star to this ra/dec
+	  star = `#{@path}/wfscat/findstars #{ra} #{dec} 5.0 10.0 | grep S | sort -n -k11 | head -5 | sort -rn -k3 | head -1`.split(' ')
+	  star_ra = star[6]
+	  star_dec = star[7]
+	  pma = star[8]
+	  pmd = star[9]
+	  name = star[0] + " " + star[1]
+
+	  # move the telescope there
+	  report("Moving to: #{name} #{star_ra} #{star_dec}")
+	  flag = move_tel(name, star_ra, star_dec, pma, pmd, 2000.0)
+	  if !flag
+	    report("Problem commanding slew.")
+	    break
+	  end
+
+	  # sit in a loop until slew completes
+	  inpos = 0
+	  sleep(2)
+	  loop do
+	    inpos = msg_get(@telsock, 'inpos').to_i
+	    break if inpos == 1
+	    sleep(1)
+	  end
+	  system("echo \"apply_offsets\" | nc -w 5 hexapod 5340")
+	  sleep(2)
+	  # sit in a loop until hexapod completes moves
+	  inmotion = 1
+	  loop do 
+	    inmotion = msg_get(@hexsock, 'motionFlag').to_i
+	    break if inmotion == 0
+	    sleep(1)
+	  end
+	  sleep(2)
+
+	  report("Slew Completed.")
+	  sleep(1)
+
+	  if @run == false
+	    report("Aborting Elcoll.")
+	    sleep(1)
+	    break
+	  end
+	  
+	  # do two iterations per el
+	  2.times {
+	    # take and average 3 images
+	    list = ""
+	    3.times {
+	      if @run == false
+		report("Aborting Elcoll.")
+		sleep(1)
+		break
+	      end
+
+	      # figure out the filename
+	      num = 0
+	      fullfilename = sprintf("%s/%s_%2d_%04d.fits", @dir, file, @el, num)
+	      netfullfilename = sprintf("%s/%s_%2d_%04d.fits", @netdir, file, @el, num)
+	      filename = sprintf("%s_%2d_%04d.fits", file, @el, num)
+	      while test(?e, fullfilename) 
+		num = num + 1
+		fullfilename = sprintf("%s/%s_%2d_%04d.fits", @dir, file, @el, num)
+		netfullfilename = sprintf("%s/%s_%2d_%04d.fits", @netdir, file, @el, num)
+		filename = sprintf("%s_%2d_%04d.fits", file, @el, num)
+	      end
+
+	      if exptime > 1
+		count = Thread.new {
+		  left = exptime.to_i
+		  left.times {
+		    report("Exposing (#{filename})...#{left} sec left.")
+		    sleep(1)
+		    left = left - 1
+		  }
+		  report("Reading out (#{filename})....")
+		}
+	      else
+		report("Exposing (#{filename})....")
+	      end
+
+	      # take the image 
+	      if (@mode == "F5")
+		system("#{@path}/getimage #{exptime} #{fullfilename}")
+	      else
+                system("sudo -u mmtop /usr/bin/rsh -n -l tim f9wfs \"/home/tim/get_apogee_image.tcl #{exptime} #{filename} \> /dev/null\"")
+                system("sudo -u mmtop /usr/bin/rcp tim@f9wfs:/home/tim/#{filename} #{fullfilename}")
+                system("sudo -u mmtop /usr/bin/rsh -n -l tim f9wfs \"rm -f #{filename} \> /dev/null\"")
+                system("sudo -u mmtop chmod g+w #{fullfilename}")
+	      end
+	      system("#{@path}/header.pl #{fullfilename} #{exptime} #{@mode}")
+	      system("/usr/bin/xpaset -p WFS zoom to 1.0")
+	      system("/usr/bin/xpaset -p WFS file #{fullfilename}")
+	      if list == ""
+		list = "#{fullfilename}"
+	      else 
+		list = list + ",#{fullfilename}"
+	      end
+	    }
+
+	    if @run == false
+	      report("Aborting Elcoll.")
+	      sleep(1)
+	      break
+	    end
+	  
+	    # analyze the image and apply corrections
+	    report("Centroiding #{list}....")
+	    msg_cmd(@wfsock, "centroid", list)
+	    report("Applying Corrections....")
+	    msg_cmd(@wfsock, "recenter", nil)
+	    msg_cmd(@wfsock, "corr_coma", nil)
+	    msg_cmd(@wfsock, "corr_focus", nil)
+	    #msg_cmd(@wfsock, "corr_primary", nil)
+	    sleep(2)
+	    # sit in a loop until hexapod completes moves
+	    inmotion = 1
+	    loop do 
+	      inmotion = msg_get(@hexsock, 'motionFlag').to_i
+	      break if inmotion == 0
+	      sleep(1)
+	    end
+	    sleep(2)
+	    inmotion = 1
+	    loop do 
+	      inmotion = msg_get(@hexsock, 'motionFlag').to_i
+	      break if inmotion == 0
+	      sleep(1)
+	    end
+	  }
+
+	  # figure out new el
+	  if @el == 85.0
+	    @step_sign = -1.0
+	  end
+	  if @el == 25.0
+	    @step_sign = 1.0
+	  end
+	  @el = @el + @step_sign*step
+
+	  report("Corrections done; going on to El = #{@el}....")
+	  sleep(3)
+
+	  # hexapod is done so log its current position
+	  system("/mmt/shwfs/getm2info >> #{@dir}/ELCOLL")
+	  system("echo \"all\" | nc hacksaw 7692 | egrep 'cell_(time|e_tc)' | xargs >> #{@dir}/ELCOLL_cell.log")
+	end
+	report("Completed Exposures.")
+	@expose.child.set_text("Take Exposures")
+	@expose.set_sensitive(true)
+      }
+    else
+      @run = false
+      @expose.set_sensitive(false)
+    end
+  end
+
+ def move_tel(name, ra, dec, rapm, decpm, epoch)
+    ra = hms2deg(ra)
+    dec = hms2deg(dec)
+    socket = sockopen('mount', 5241)
+    socket.send("newstar\n", 0)
+    socket.send("#{name}\n", 0)
+    socket.send("#{ra}\n", 0)
+    socket.send("#{dec}\n", 0)
+    socket.send("#{rapm}\n", 0)
+    socket.send("#{decpm}\n", 0)
+    socket.send("#{epoch}\n", 0)
+    socket.send("J\n", 0)
+    socket.send("elcoll: #{name}\n", 0)
+    answer = socket.gets
+    socket.close
+    socket = nil
+
+    if (answer =~ /OK/)
+      return true
+    else
+      return false
+    end
+  end
+
+  def sexagesimal(angle)
+    angle = angle.to_f
+    if (angle < 0)
+      angle = -angle
+      sign = "-"
+    else
+      sign = "+"
+    end
+
+    d = angle.to_i
+    x = (angle - d.to_f)*60.0
+    m = x.to_i
+    s = (x - m.to_f)*60.0
+
+    return sprintf("%s%02d:%02d:%05.2f", sign, d, m, s)
+  end
+
+  def hms2deg(string)
+    vals = string.split(':')
+    return 'bad' if vals.size != 3
+    hour = vals[0].to_f
+    if hour < 0
+      hour = hour * -1
+    end
+    min  = vals[1].to_f
+    sec  = vals[2].to_f
+    blah = hour + min/60.0 + sec/3600.0
+    if (string =~ /-/ && blah > 0.0)
+      blah = blah * -1
+    end
+    return blah
+  end
+
+end
+
+if !(ARGV[0] == "F5" || ARGV[0] == "F9")
+  puts "Specify F5 or F9."
+else
+  # get the ball rolling!
+  Gtk.init
+  MainWindow.new(ARGV[0])
+  Gtk.main
+end

@@ -1,0 +1,12 @@
+
+open program MMoveProgram
+ ProgramInit(M)
+ ChekDesired(M)
+ ReleaseBrak(M)
+
+ Move(M, MDesired) 
+ WaitForInPosition(M)
+
+ RestoreBrak(M)
+ ProgramDone(M)
+close

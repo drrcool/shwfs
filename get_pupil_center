@@ -1,0 +1,59 @@
+#!/usr/bin/python
+
+import sys
+import getopt
+from numpy.numarray import *
+import scipy.ndimage as nd
+import pyfits
+import imagestats
+
+def rfits(file):
+    f = pyfits.open(fitsfile)
+    hdu = f[0]
+    return hdu.data
+
+def get_center(im):
+    (ycen, xcen) = nd.center_of_mass(im)
+    #(ycen, xcen) = pos[0]
+    xcen = xcen+1
+    ycen = ycen+1
+    return (xcen, ycen)
+    
+########################################################################3
+
+fitsfile = sys.argv[1]
+mode = sys.argv[2]
+im = rfits(fitsfile)
+
+#os.system("cat %s | xpaset WFS fits" % fitsfile)
+
+allstats = imagestats.ImageStats(im)
+stats = imagestats.ImageStats(im, nclip=5)
+mean = stats.mean
+sig = stats.stddev
+max = stats.max
+
+smooth = nd.gaussian_filter(im, 25.0)
+
+find = smooth >= (mean + 1.5*sig)
+labels, num = nd.label(find)
+
+if mode == 'F5':
+    clip = smooth >= (mean + sig)
+else:
+    clip = smooth >= (mean - 0.5*sig)
+
+if num >= 1:
+    smooth = nd.gaussian_filter(im, 4.0)
+
+    nsig = 5.0
+    spot_clip = smooth >= (mean + nsig*sig)
+    labels, num = nd.label(spot_clip)
+    if num < 30:
+        print "No pupil found."
+    else:
+        xcen, ycen = get_center(clip)
+        print "%6.2f  %6.2f" % (xcen, ycen)
+#        os.system("xpaset -p WFS regions circle %f %f 5" % (xcen, ycen))
+else:
+    print "No pupil found."

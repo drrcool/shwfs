@@ -1,0 +1,126 @@
+# Makefile for the c routines for the wavefront sensor 
+# scw: 4-99; update: 8-18-00
+CC=gcc
+CFLAGS=-m32 -O2
+
+all:	f9optics f5optics cat model_donut mmirs
+
+cat: 
+	cd wfscat; make all
+
+clean:
+	rm -f *.o; rm -f *~; rm -f ihaverage_f5 ihaverage shcenfind_f5 bcv pup_psf pup_discretePhs bcv_f5 getZernikesAndPhases shcenfind pup_discretePhs_f5 pup_psf_f5 getZernikesAndPhases_f5 stella_acquire; cd wfscat; make clean
+
+f9optics: ihaverage WFSlib.o pup_psf getZernikesAndPhases pup_discretePhs bcv shcenfind
+
+f5optics: ihaverage_f5 WFSlib_f5.o pup_psf_f5 getZernikesAndPhases_f5 pup_discretePhs_f5 bcv_f5 shcenfind_f5
+
+mmirs: ihaverage_mmirs WFSlib_mmirs.o pup_psf_mmirs getZernikesAndPhases_mmirs pup_discretePhs_mmirs bcv_mmirs shcenfind_mmirs
+
+stella_acquire: stella_acquire.c
+	${CC} ${CFLAGS} stella_acquire.c -o stella_acquire -lm -lcfitsio -ldt3155
+
+ihaverage: ihaverage.c fileio.o optics.h
+	${CC} ${CFLAGS} -DF9 ihaverage.c fileio.o -lm -o ihaverage
+
+ihaverage_f5: ihaverage.c fileio.o optics.h
+	${CC} ${CFLAGS} -DF5 ihaverage.c fileio.o -lm -o ihaverage_f5
+
+ihaverage_mmirs: ihaverage.c fileio.o optics.h
+	${CC} ${CFLAGS} -DMMIRS ihaverage.c fileio.o -lm -o ihaverage_mmirs
+
+2d : 2d.c nrutil.o
+	${CC} ${CFLAGS} nrutil.o 2d.c -o 2d
+
+nrutil.o : nrutil.c nrutil.h
+	${CC} ${CFLAGS} -c nrutil.c -o nrutil.o
+
+svdcmp.o : svdcmp.c
+	${CC} ${CFLAGS} -c svdcmp.c -o svdcmp.o
+
+fileio.o: fileio.c fileio.h
+	${CC} ${CFLAGS} -c fileio.c 
+
+WFSlib.o: WFSlib.c WFSlib.h nrutil.o  optics.h
+	${CC} ${CFLAGS} -DF9 -c WFSlib.c  
+
+WFSlib_f5.o: WFSlib.c WFSlib.h nrutil.o  optics.h
+	${CC} ${CFLAGS} -DF5 -o WFSlib_f5.o -c WFSlib.c  
+
+WFSlib_mmirs.o: WFSlib.c WFSlib.h nrutil.o  optics.h
+	${CC} ${CFLAGS} -DF5 -o WFSlib_mmirs.o -c WFSlib.c  
+
+pythag.o: pythag.c 
+	${CC} ${CFLAGS} -c pythag.c -o pythag.o
+
+wfs_image.o: wfs_image.c
+	${CC} ${CFLAGS} -c wfs_image.c
+
+svbksb.o: svbksb.c 
+	${CC} ${CFLAGS} -c svbksb.c -o svbksb.o
+
+zernike.o : zernike.c zernike.h 
+	${CC} ${CFLAGS} -c zernike.c 
+
+zerntest: zerntest.c zernike.o fileio.o nrutil.o fileio.h zernike.h
+	${CC} ${CFLAGS} zerntest.c -lm zernike.o fileio.o nrutil.o -o zerntest
+
+xpmtst: xpmtst.c wfs_image.o nrutil.o
+	${CC} ${CFLAGS} xpmtst.c wfs_image.o  nrutil.o -o xpmtst
+
+svdtest: fileio.o nrutil.o pythag.o svdcmp.o svbksb.o svdtest.c
+	${CC} ${CFLAGS} svdtest.c -lm nrutil.o pythag.o svdcmp.o svbksb.o fileio.o -o svdtest
+
+pup_psf: pup_psf.c nrutil.o WFSlib.o zernike.o fileio.o wfs_image.o optics.h
+	${CC} ${CFLAGS} -DF9 pup_psf.c -lm nrutil.o WFSlib.o zernike.o fileio.o wfs_image.o -o pup_psf
+
+pup_psf_f5: pup_psf.c nrutil.o WFSlib_f5.o zernike.o fileio.o wfs_image.o optics.h
+	${CC} ${CFLAGS} -DF5 pup_psf.c -lm nrutil.o WFSlib_f5.o zernike.o fileio.o wfs_image.o -o pup_psf_f5
+
+pup_psf_mmirs: pup_psf.c nrutil.o WFSlib_mmirs.o zernike.o fileio.o wfs_image.o optics.h
+	${CC} ${CFLAGS} -DMMIRS pup_psf.c -lm nrutil.o WFSlib_mmirs.o zernike.o fileio.o wfs_image.o -o pup_psf_mmirs
+
+model_donut: model_donut.c nrutil.o WFSlib_f5.o zernike.o fileio.o wfs_image.o optics.h
+	${CC} ${CFLAGS} -DF5 model_donut.c -lm nrutil.o WFSlib_f5.o zernike.o fileio.o wfs_image.o -o model_donut
+
+getZernikesAndPhases: fileio.o nrutil.o WFSlib.o zernike.o svbksb.o svdcmp.o pythag.o getZernikesAndPhases.c optics.h
+	${CC} ${CFLAGS} -DF9 getZernikesAndPhases.c -lm nrutil.o fileio.o svbksb.o WFSlib.o zernike.o svdcmp.o pythag.o -o  getZernikesAndPhases
+
+getZernikesAndPhases_f5: fileio.o nrutil.o WFSlib_f5.o zernike.o svbksb.o svdcmp.o pythag.o getZernikesAndPhases.c optics.h
+	${CC} ${CFLAGS} -DF5 getZernikesAndPhases.c -lm nrutil.o fileio.o svbksb.o WFSlib_f5.o zernike.o svdcmp.o pythag.o -o  getZernikesAndPhases_f5
+
+getZernikesAndPhases_mmirs: fileio.o nrutil.o WFSlib_mmirs.o zernike.o svbksb.o svdcmp.o pythag.o getZernikesAndPhases.c optics.h
+	${CC} ${CFLAGS} -DMMIRS getZernikesAndPhases.c -lm nrutil.o fileio.o svbksb.o WFSlib_mmirs.o zernike.o svdcmp.o pythag.o -o  getZernikesAndPhases_mmirs
+
+bcv: bcv.c zernike.h nrutil.o fileio.o WFSlib.o zernike.o wfs_image.o
+	${CC} ${CFLAGS} -DF9 -o bcv nrutil.o fileio.o WFSlib.o zernike.o wfs_image.o -lm bcv.c
+
+bcv_coma: bcv_coma.c zernike.h nrutil.o fileio.o WFSlib.o zernike.o wfs_image.o
+	${CC} ${CFLAGS} -DF9 -o bcv_coma nrutil.o fileio.o WFSlib.o zernike.o wfs_image.o -lm bcv_coma.c
+
+bcv_f5: bcv.c zernike.h nrutil.o fileio.o WFSlib_f5.o zernike.o wfs_image.o
+	${CC} ${CFLAGS} -DF5 -o bcv_f5 nrutil.o fileio.o WFSlib_f5.o zernike.o wfs_image.o -lm bcv.c
+
+bcv_mmirs: bcv.c zernike.h nrutil.o fileio.o WFSlib_mmirs.o zernike.o wfs_image.o
+	${CC} ${CFLAGS} -DF5 -o bcv_mmirs nrutil.o fileio.o WFSlib_mmirs.o zernike.o wfs_image.o -lm bcv.c
+
+as2binary: as2binary.c nrutil.o fileio.o 
+	${CC} ${CFLAGS} -o as2binary nrutil.o fileio.o -lm as2binary.c
+
+pup_discretePhs: pup_discretePhs.c nrutil.o WFSlib.o zernike.o fileio.o wfs_image.o optics.h
+	${CC} ${CFLAGS} -DF9 pup_discretePhs.c -lm nrutil.o WFSlib.o zernike.o fileio.o wfs_image.o -o pup_discretePhs
+
+pup_discretePhs_f5: pup_discretePhs.c nrutil.o WFSlib_f5.o zernike.o fileio.o wfs_image.o optics.h
+	${CC} ${CFLAGS} -DF5 pup_discretePhs.c -lm nrutil.o WFSlib_f5.o zernike.o fileio.o wfs_image.o -o pup_discretePhs_f5
+
+pup_discretePhs_mmirs: pup_discretePhs.c nrutil.o WFSlib_mmirs.o zernike.o fileio.o wfs_image.o optics.h
+	${CC} ${CFLAGS} -DMMIRS pup_discretePhs.c -lm nrutil.o WFSlib_mmirs.o zernike.o fileio.o wfs_image.o -o pup_discretePhs_mmirs
+
+shcenfind: shcenfind.c nrutil.o fileio.o optics.h
+	${CC} ${CFLAGS} -DF9 -o shcenfind -lm nrutil.o fileio.o shcenfind.c
+
+shcenfind_f5: shcenfind.c nrutil.o fileio.o optics.h
+	${CC} ${CFLAGS} -DF5 -o shcenfind_f5 -lm nrutil.o fileio.o shcenfind.c
+
+shcenfind_mmirs: shcenfind.c nrutil.o fileio.o optics.h
+	${CC} ${CFLAGS} -DMMIRS -o shcenfind_mmirs -lm nrutil.o fileio.o shcenfind.c
