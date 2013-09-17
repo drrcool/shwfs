@@ -374,11 +374,20 @@ class WFSCat
       @goto.set_sensitive(false)
       @return.set_sensitive(false)
 
-      if @autohex > 0
-        #system("echo \"auto_offsets #{@autohex}\" | nc -w 5 hexapod 5340")
-        MMTsocket.hexcmd "auto_offsets #{@autohex}"
-      end
-      log_entry "-done restoring auto_offsets: #{@autohex}"
+
+######## Changed RJC - Sept 17, 2013
+## Originally this code would check to see if auto_offsets was applied before finding a WFS
+## Star and then set that setting again when finished WFSing.  To remove one potential thing that
+## can be forgotten during a run, we are changing this to *always* apply auto-offsets.
+
+#      if @autohex > 0
+#        #system("echo \"auto_offsets #{@autohex}\" | nc -w 5 hexapod 5340")
+#        MMTsocket.hexcmd "auto_offsets #{@autohex}"
+#      end
+#     log_entry "-done restoring auto_offsets: #{@autohex}"
+
+      MMTsocket.hexcmd "auto_offsets 1"
+      log_entry "-done auto_offsets 1 (enabled)"   
 
 
       #system("echo \"offset instrument z #{@instoff}\" | nc -w 5 hexapod 5340")
