@@ -380,18 +380,22 @@ class WFSCat
 ## Star and then set that setting again when finished WFSing.  To remove one potential thing that
 ## can be forgotten during a run, we are changing this to *always* apply auto-offsets.
 
-#      if @autohex > 0
-#        #system("echo \"auto_offsets #{@autohex}\" | nc -w 5 hexapod 5340")
-#        MMTsocket.hexcmd "auto_offsets #{@autohex}"
-#      end
-#     log_entry "-done restoring auto_offsets: #{@autohex}"
+      if @autohex > 0
+        #system("echo \"auto_offsets #{@autohex}\" | nc -w 5 hexapod 5340")
+        MMTsocket.hexcmd "auto_offsets #{@autohex}"
+      end
+      ##If autohex was exactly zero, turn on auto_offsets with 30s timer
+      if @autohex == 0
+        MMTsocket.hexcmd "auto_offsets 30"
+      end
+      log_entry "-done restoring auto_offsets: #{@autohex}"
 
-      MMTsocket.hexcmd "auto_offsets 1"
-      log_entry "-done auto_offsets 1 (enabled)"   
+      #MMTsocket.hexcmd "auto_offsets 1"
+      #log_entry "-done auto_offsets 1 (enabled)"   
 
 
-      #system("echo \"offset instrument z #{@instoff}\" | nc -w 5 hexapod 5340")
-      #system("echo \"apply_offsets\" | nc -w 5 hexapod 5340")
+      system("echo \"offset instrument z #{@instoff}\" | nc -w 5 hexapod 5340")
+      system("echo \"apply_offsets\" | nc -w 5 hexapod 5340")
 
       MMTsocket.hexcmd "offset instrument z #{@instoff}"
       log_entry "-done restoring instoff(z) #{@instoff}"
