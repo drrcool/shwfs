@@ -90,7 +90,7 @@ $reffoc['Maestro'] = 3182.4
 $reffoc['MegaCam'] = -500.0
 $reffoc['SWIRC'] = -848.0
 $reffoc['MMIRS'] = 0.0
-$reffoc['Maestro'] = 0.0
+$reffoc['Maestro'] = -800.0
 
 $refspher = Hash.new
 $refspher['Hecto'] = -150.0

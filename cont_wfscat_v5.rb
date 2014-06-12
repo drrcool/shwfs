@@ -245,8 +245,8 @@ class WFSCat
               
               #This is where I am going to try and do the transformation to get the WFS to land where it needs to go 
               #in order to have the star be able to be centered on the WFS while still being in the meastro slit
-              slit_offset =  15.0 #the arcsec distance to the slit.
-              slit_angle = -5.0 # this is the angle that the slit makes relative to the 0 degree line in the system 
+              slit_offset = 15.0 # 15.0 #the arcsec distance to the slit.
+              slit_angle = -5.0 # -5.0 # this is the angle that the slit makes relative to the 0 degree line in the system 
               stage_offset = 38.0-@flip # this is the angle that the WFS stage makes relative to the 0 deg line in the system
               
               diff_angle = (slit_angle - stage_offset) # this is the relative angle between the WFS stage and the slit

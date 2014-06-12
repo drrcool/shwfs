@@ -180,9 +180,7 @@ set ref_foc(Pisces) 6786
 set ref_foc(MegaCam) -468
 #set ref_foc(Hecto) 2967
 set ref_foc(Hecto) -2810
-#set ref_foc(Maestro) -2810
-#set ref_foc(Maestro) -1920 #Dec 2013
-set ref_foc(Maestro) -2620 
+set ref_foc(Maestro) -2820
 set ref_foc(SWIRC) -2017
 set ref_foc(MMIRS) 612
 
