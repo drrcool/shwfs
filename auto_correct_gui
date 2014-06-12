@@ -258,7 +258,7 @@ end
 
   # calc hexapod move to center up on megacam 
   def center_megacam
-    unless @inst == 'MegaCam' || @inst == 'SWIRC' || @inst == 'Hecto'
+    unless @inst == 'MegaCam' || @inst == 'SWIRC' || @inst == 'Hecto' || @inst == 'Maestro'
       return
     end
     # check if we're close enough
@@ -271,6 +271,12 @@ end
       xdist = 256 - 231.5
       ydist = 256 - 212.4
     end
+    if @inst == 'Maestro'
+      xdist = 0
+      ydist = 0
+    end
+
+
     xdist = xdist*@xparity[@mode]
     ydist = ydist*@yparity[@mode]
 
@@ -295,6 +301,10 @@ end
     if @inst == 'SWIRC'
       system("echo \"offset_inc wfs z -30.0\" | nc -w 5 #{@hexhost} #{@hexport}")
     end
+    if @inst == 'Maestro'
+      system("echo \" offset_inc wfs z -800.0\" | nc -w 5 #{@hexhost} #{@hexport}")
+    end
+
     system("echo \"apply_offsets\" | nc -w 5 #{@hexhost} #{@hexport}")
     wait4hexapod
     wait4hexapod
