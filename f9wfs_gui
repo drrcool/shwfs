@@ -18,8 +18,61 @@ require 'thread'
 # iconv will be deprecated in the future, use String#encode instead.
 # so we suppress this warning while we wait for an upstream fix.
 save_verbose=$VERBOSE; $VERBOSE=nil
-require 'soap/rpc/driver'
+
+#In summer 2015, we changed the way calls to the
+#F9 topbox were done to remove the need for soap.
+#require 'soap/rpc/driver'
 $VERBOSE=save_verbose
+
+#Define the new lampserver class
+class LampServerClient
+
+    def initialize
+        require 'resolv'
+        srvname = "lampbox"
+        dns =  Resolv::DNS.open
+        resource = dns.getresource("_#{srvname}._tcp.mmto.arizona.edu", Resolv::DNS::Resource::IN::SRV)
+        @host = resource.target.to_s
+        @port = resource.port.to_s
+        @timeout = 120
+    end
+
+    #   returns "0" for success, "1" for timeout, or "X" for problem
+    #   Argument: "mirror" = "in" or "out"
+    def set_mirror_exclusive(mirror)
+        reply = "X"
+        service = nil
+        begin
+            Timeout::timeout(@timeout) do
+                service = TCPSocket.open(@host, @port.to_i)
+                service.puts("set_mirror_exclusive #{mirror.strip}")
+                reply = service.gets()
+                reply = reply.chomp if reply
+            end
+        ensure
+            service.close if service
+        end
+        return reply
+    end
+
+    #   returns "OUT", "IN", or "BUSY", or "X" or message for problem
+    def get_mirror
+        reply = "X"
+        service = nil
+        begin
+            Timeout::timeout(@timeout) do
+                service = TCPSocket.open(@host, @port.to_i)
+                service.puts("get_mirror")
+                reply = service.gets()
+                reply = reply.chomp if reply
+            end
+        ensure
+            service.close if service
+        end
+        return reply
+    end
+end
+
 
 ### define the main GUI window
 class MainWindow
@@ -36,11 +89,16 @@ class MainWindow
     @mirror_text = @glade.get_widget("CompStatus")
     @mirror_button = @glade.get_widget("CompMirror")
 
-    @lampserver = SOAP::RPC::Driver.new("http://hacksaw.mmto.arizona.edu:7851", "urn:Lamp")
-    @lampserver.options["protocol.http.receive_timeout"] = 120
-    @lampserver.add_method("set_mirror_exclusive", "mirror")
-    @lampserver.add_method("get_mirror")
-    @lampserver.add_method("wait_mirror")
+    #These were the original SOAP calls, need to replace them
+#    @lampserver = SOAP::RPC::Driver.new("http://hacksaw.mmto.arizona.edu:7851", "urn:Lamp")
+#    @lampserver.options["protocol.http.receive_timeout"] = 120
+#    @lampserver.add_method("set_mirror_exclusive", "mirror")
+#    @lampserver.add_method("get_mirror")
+#    @lampserver.add_method("wait_mirror")
+
+    @lampserver = LampServerClient.new
+    
+
 
     get_mirror
 
@@ -129,7 +187,7 @@ class MainWindow
       Thread.new {
         move_mirror("in")
       }
-    end    
+    end
   end
 
   def move_mirror(dir)
@@ -205,8 +263,8 @@ class MainWindow
 	  num = 0
 	  fullfilename = sprintf("%s/%s_%04d.fits", @dir, file, num)
 	  filename = sprintf("%s_%04d.fits", file, num)
-#	  while test(?e, fullfilename) 
-	  while test(?e, "#{@path}/datadir/#{filename}") 
+#	  while test(?e, fullfilename)
+	  while test(?e, "#{@path}/datadir/#{filename}")
 	    num = num + 1
 	    fullfilename = sprintf("%s/%s_%04d.fits", @dir, file, num)
 	    filename = sprintf("%s_%04d.fits", file, num)
@@ -236,9 +294,9 @@ class MainWindow
 
 	n = n + 1
       }
-      if nexp == 1 
+      if nexp == 1
 	report("Completed Exposure.")
-      else 
+      else
 	report("Completed Exposures.")
       end
       @expose.set_sensitive(true)

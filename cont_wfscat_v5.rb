@@ -245,8 +245,8 @@ class WFSCat
               
               #This is where I am going to try and do the transformation to get the WFS to land where it needs to go 
               #in order to have the star be able to be centered on the WFS while still being in the meastro slit
-              slit_offset = 15.0 # 15.0 #the arcsec distance to the slit.
-              slit_angle = -5.0 # -5.0 # this is the angle that the slit makes relative to the 0 degree line in the system 
+              slit_offset = 5.0 # 15.0 #the arcsec distance to the slit.
+              slit_angle = 180-5.0 # -5.0 # this is the angle that the slit makes relative to the 0 degree line in the system 
               stage_offset = 38.0-@flip # this is the angle that the WFS stage makes relative to the 0 deg line in the system
               
               diff_angle = (slit_angle - stage_offset) # this is the relative angle between the WFS stage and the slit
@@ -255,6 +255,8 @@ class WFSCat
               target_theta = rot.to_f #rotator angle we need to go to to get star on WFS if at CoR
               target_dist = data[10].to_f*60 # inter.value[6] is the distance the WFS would go if star is at CoR. This also puts 
                                              #it into arcsec to be on the same scale as everything else
+
+              #Offset as of 9/2/14 was 5.32/-2.31 " in ra/dec
 
               #Some conversion factors
               arcsec_per_radian = 206264.806247

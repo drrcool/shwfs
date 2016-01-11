@@ -27,6 +27,7 @@ from scipy import optimize
 import pylab
 from numpy import *
 from pyraf import iraf
+from scipy.ndimage.filters import median_filter
 
 def srv_lookup(service):
     DNS.DiscoverNameServers()
@@ -40,6 +41,7 @@ def srv_lookup(service):
     return (host, port)
 
 def read_centroids(file):
+    
     fp = open(file, 'r')
     lines = fp.readlines()
     fp.close()
@@ -242,7 +244,13 @@ def get_center(im, xrefcen, yrefcen):
     return (xcen, ycen)
 
 def daofind(im):
-    cfile = open("/mmt/shwfs/%s_reference.center" % mode, 'r')
+    
+    if mode == 'MMIRS':
+        cfile = open("/mmt/shwfs/%s_reference.center" % mmirscam, "r")
+    else:
+        cfile = open("/mmt/shwfs/%s_reference.center" % mode, 'r')
+    
+
     [xrefcen, yrefcen] = cfile.read().split()
     xrefcen = float(xrefcen)
     yrefcen = float(yrefcen)
@@ -256,24 +264,51 @@ def daofind(im):
     max = stats.max
 
     print "Mean = ", mean
+    print "Sigma = ", sig
     
     if mode == 'F9':
         smooth = nd.gaussian_filter(im, 5.0)
         maxstars = 140
+        minstars = 130
         nsig = 5.0
     elif mode == 'F5':
         smooth = nd.gaussian_filter(im, 3.0)
         maxstars = 140
+        minstars = 120
         nsig = 5.0
+    elif mode == 'MMIRS':
+        #MMIRS images tend to have a lot of cosmic rays
+        #We mask these by doing a square filter of the image and look
+        #for outliers (outlying pixels are replaced from the filtered image).
+        #Then we gaussian filter like the other instruments and go from there.
+        #RJC - 2015 June 8
+        median_image = nd.median_filter(im, 3.0)
+        diff_image = im - median_image
+        diff_stats = imagestats.ImageStats(diff_image*1.0, nclip=5)
+        mask_image = (im > (median_image+diff_stats.stddev*3)).astype(int)
+        
+        new_image = im * (1-mask_image) + median_image*mask_image
+        smooth = nd.gaussian_filter(new_image, 1.1)
+
+        smooth_stats = imagestats.ImageStats(smooth)
+        print "Smoothed Mean = ", smooth_stats.mean
+        print "Smoothed Sigma = ", smooth_stats.stddev
+
+        sig = smooth_stats.stddev
+        
+        maxstars = 140
+        minstars = 120
+        nsig = 2.5
     else:
         smooth = nd.gaussian_filter(im, 1.1)
         nsig = 8.0
         maxstars = 155
+        minstars = 130
         
     nstars = 0
     maxstars = maxstars - spottol
 
-    while nstars < maxstars:
+    while nstars < minstars:
         spot_clip = smooth >= (mean + nsig*sig)
         labels, num = nd.label(spot_clip)
         nstars = num
@@ -282,7 +317,8 @@ def daofind(im):
             break
 #        print num, " spots found."
 
-    if nstars < maxstars:
+    print(nstars, maxstars, minstars, spottol)
+    if nstars < minstars:
         print "Pupil too far off image or seeing too poor."
         os.system("echo \"image;text 256 500 # text={Seeing too poor or pupil too far off image.}\" | xpaset WFS regions")
         return (False, False, False)
@@ -474,7 +510,9 @@ def shcenfind(fitsfile, mode, xcen, ycen):
     ds9spots(daofile, 0, 1, 'red', 1)
     get_seeing(fitsfile, scale[mode], reffwhm_pix)
 
+
     (star, xmag, ymag, xc, yc) = read_centroids(daofile)
+    print(ref[mode])
     (refdat, xrmag, yrmag, xrc, yrc) = read_centroids(ref[mode])
 
     print "fmin, dao header = ", xmag, ymag, xc, yc
@@ -605,7 +643,8 @@ def draw_dirs(rot, off, daofile):
 scale = {}
 scale['F5'] = 0.135
 scale['F9'] = 0.12
-scale['MMIRS'] = 0.208
+#scale['MMIRS'] = 0.208 <-- original pixel scale in code, but this is the MMIRS scale
+scale['MMIRS'] = 0.16  # This is the correct guide camera pixel scale for MMIRS
 
 sky = {}
 sky['F5'] = 0.297
@@ -648,9 +687,15 @@ iraf.noao.imred.crutil()
 iraf.set(uparm="./uparm")
 
 if mode == 'MMIRS':
-    iraf.imsurfit(fitsfile, 'back.fits', xorder=3, yorder=3, upper=2, lower=2, ngrow=35, rows='[20:510]', columns='[20:510]')
-    iraf.imarith(fitsfile, '-', 'back.fits', fitsfile)
-    iraf.cosmicrays(fitsfile,fitsfile,interactive='no',threshold=20,fluxratio=3,window=7)
+    f = pyfits.open(fitsfile)
+    d = f[0].data
+
+    #Subtrack the median filtered image (exlucing overscan)
+    d[:, 12:] -= median_filter(d[:,12:], size=(51, 51))
+    #Set ovewrscan to 0
+    d[:,:12] = 0
+    f.writeto(fitsfile, clobber=True)
+    
 else:
     iraf.imsurfit(fitsfile, 'back.fits', xorder=2, yorder=2, upper=2, lower=2, ngrow=15)
     iraf.imarith(fitsfile, '-', 'back.fits', fitsfile)
@@ -659,16 +704,28 @@ hdu = rfits(fitsfile)
 hdu.verify('fix')
 image = hdu.data
 hdr = hdu.header
-try:
-    rot = hdr['ROT']
-except KeyError:
-    rot = 0.0
 
-hdr_debug = 1
+if mode == 'MMIRS':
+    try:
+        rot = hdr['ROTATOR']
+    except KeyError:
+        rot = 0.0
+    
+else:
+    try:
+        rot = hdr['ROT']
+    except KeyError:
+        rot = 0.0
+
+if mode != "MMIRS" :
+    hdr_debug = 1
+else:
+    hdr_debug = 0
+    
 if hdr_debug:
-	print "image header ROT = ", hdr['ROT']
-	print "image header EL = ", hdr['EL']
-	print "image header AZ = ", hdr['AZ']
+    print "image header ROT = ", hdr['ROT']
+    print "image header EL = ", hdr['EL']
+    print "image header AZ = ", hdr['AZ']
 
 os.system("xpaset -p WFS cd `pwd`")
 os.system("xpaset -p WFS file %s" % fitsfile)
@@ -677,10 +734,16 @@ ref = {}
 ref['F5'] = "/mmt/shwfs/f5sysfile.cntr"
 ref['F9'] = "/mmt/shwfs/f9newsys.cntr"
 try: 
-    mmirscam = hdr['WFSNAME']
+    mmirscam = hdr['WFSNAME'].strip()
 except KeyError:
     mmirscam = "mmirs2"
 ref['MMIRS'] = "/mmt/shwfs/%s_sysfile.cntr" % mmirscam
+
+#This is a patch to account for the fact that for MMIRS, camera 1 has
+#a rotator angle of 0 and camera 2, 180.
+if mmirscam == 'mmirs1':
+    rot = rot + 180 #This ensures that when the angle is added in
+    #shwfs_unified, that the correct angle is used.
 
 xcen, ycen, spots = daofind(image)
 
@@ -690,9 +753,9 @@ if spots:
     avfile = fitsfile.replace('fits', 'dao')
     if shcenfind(fitsfile,mode,xcen,ycen):
         print avfile, rot
-
-os.system( "/mmt/shwfs/see_forever %s %s" % (fitsfiles, mode)  )
-
+        #This used to be outside the loop, but we only want it executed
+        #when we have spots
+        os.system( "/mmt/shwfs/see_forever %s %s" % (fitsfiles, mode)  )
 sys.exit()
 
 # THE END

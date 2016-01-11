@@ -83,7 +83,8 @@ if (-e "F9") {
 } elsif (-e "MMIRS") {
   $mode = "MMIRS";
   $reffwhm = 1.82;
-  $scale = 0.208;
+  ##  $scale = 0.208;  <-- original value, but this is MMIRS not the guider
+  $scale = 0.16
   $rotoff = 0.0;
 } else {
   die "Specify mode.\n";

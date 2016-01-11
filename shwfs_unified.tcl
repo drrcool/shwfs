@@ -162,6 +162,7 @@ exec rm -f F9
 exec rm -f F5
 exec rm -f MMIRS
 
+
 set maxM2tilt 500; # max M2 vertex tilt allowed by program (safety)
 
 #make shortcut to the average and centroiding frame of .wfs
@@ -182,7 +183,8 @@ set ref_foc(MegaCam) -468
 set ref_foc(Hecto) -2810
 set ref_foc(Maestro) -2820
 set ref_foc(SWIRC) -2017
-set ref_foc(MMIRS) 612
+#set ref_foc(MMIRS) 0
+set ref_foc(MMIRS) 1912
 
 set ref_spher(MegaCam) -80
 set ref_spher(Hecto) -150
@@ -279,8 +281,9 @@ switch $fmode {
 	set ref_spher_nm $ref_spher($inst)
 
 	# correction gains
-	set m1_gain 0.1
-	set m2_gain 0.2
+	set m1_gain 0.5
+	set m2_gain 1.0
+	#RJC - Changed 9/28 -- these are the gains the default GUI will use, and should be the same as other operations.  Contiuous WFS uses smaller values.
 
 	# current and desired centers
 	set curr_xcen 256
@@ -456,14 +459,13 @@ proc do_centroid { list } {
     # set up command to do the centroiding
     #set command "$bin_dir/daofind.py $list $fmode 0 2> /dev/null"
     set command "$bin_dir/daofind.py $list $fmode 0 $toms_mode"
-
     puts "centroid routine calls: $command"
-
+    
     # call script to do the centroiding
     set fid [open |$command r]
     set tmp [read $fid]
     close $fid
-
+    
     # parse the response from DAOFIND --
     # response is a lot of chit chat followed by
     # the one line we want, which has the output filename
@@ -486,7 +488,11 @@ proc do_centroid { list } {
 
 	}
     }   
+    
 
+    
+    
+    
     # When daofind.py discovers an error
     # (typically a hopeless image it cannot cope with)
     # it will not return the line expected above, nor
@@ -498,6 +504,8 @@ proc do_centroid { list } {
 	average $sffile
 	show_spot_count $sffile
     }
+
+
 }
 
 # centroid and average a comma-sep'd list of FITS images. 
@@ -510,10 +518,9 @@ proc WFSSERV.centroid { s sock msgid cmd list } {
     if {![file exists "uparm"]} {eval exec mkdir uparm}
 
     puts "MSG call to centroid routine: $list"
-
     do_centroid $list
-
     msg_ack $sock $msgid
+
 }
 
 #------------------------------------------------------------------------
@@ -627,19 +634,20 @@ set wim [toplevel .wim]
 wm geometry .wim 630x655+0+0
 #set xpmimg [canvas $wim.xpms -height 300 -width 650 -bg lightyellow \
 #		-relief sunken -borderwidth 5]
-set xpmimg [canvas $wim.xpms -height 300 -width 450 -bg lightyellow \
+set xpmimg [canvas $wim.xpms -height 400 -width 650 -bg white \
 		-relief sunken -borderwidth 5]
 
 #create the places for the xpm images in the canvas
-$xpmimg create image 110 150 -tag pmap
-$xpmimg create image 310 150 -tag psfmap
-#$xpmimg create image 510 150 -tag actmap
+$xpmimg create image 200 200 -tag residmap
+$xpmimg create image 500 200 -tag psfmap
+#$xpmimg create image 510 150 -tag pupmap
 
 #label the canvas
-$xpmimg create text 430 150 -text "+Y (N)" 
-$xpmimg create text 225 290 -text "+X (E)"
-$xpmimg create text 110 20 -text "Pupil"
-$xpmimg create text 310 20 -text "PSF"
+$xpmimg create text 590 200 -text "+Y (N)" 
+$xpmimg create text 300 390 -text "+X (E)"
+$xpmimg create text 210 20 -text "Resid"
+$xpmimg create text 510 20 -text "PSF"
+#$xpmimg create text 520 20 -text "Pupil"
 #$xpmimg create text 510 20 -text "Act Forces"
 
 #set up entries to control psf image generation
@@ -1122,7 +1130,7 @@ proc recenter { } {
 # Called from "average" and when the "Aberr" button is pushed.
 
 proc zernike {avfile} {
-    global systemFile AVHOME reptxt slv_mode rotangle fmode
+    global systemFile AVHOME reptxt slv_mode rotangle fmode residmap xpmimg
 
     # this is by default "ref.dat" these days
     if {$systemFile == "Not yet selected"} {
@@ -1152,11 +1160,31 @@ proc zernike {avfile} {
     puts "Run command: $cmd $systemFile $filename $slv_mode $rotangle"
     puts [exec $cmd $systemFile $filename $slv_mode $rotangle]
 
+    set plotcmd  "$AVHOME/plot_wfs_resid.py"
+    puts "Running plot generation code"
+    puts [exec $plotcmd $filename $fmode]
+    puts "Finished Plotting"
+    
+    # refresh the actuator force XPM image
+    image create photo resid_map -file resid.png
+    $xpmimg itemconfigure residmap -image resid_map
+    
+
+    
     report "* linked spots: [eval exec wc -l link]\n"
     report "* Aberration routines finished.\n"
 
     set zrnfile "${avfile}.zrn"	
 
+    #If we're using MMIRS, we need to correct the zernike file for off-axis aberations
+    set include_off_axis  0 # This is a flag that will ignore this code until I change this to 1
+    if {$fmode == "MMIRS" && $include_off_axis ==  1} {
+	puts "Updating Zernikes for Off-Axis Corrections
+
+    }
+    
+
+    
     showzerns $zrnfile
 }
 
@@ -1397,8 +1425,8 @@ proc draw_pupil {zfile mask} {
     report $results\n ; # report rms phase errors for selected modes
 
     # Tix allows XPM images as type pixmap
-    image create pixmap pup_map -file wavefront.xpm
-    $xpmimg itemconfigure pmap -image pup_map
+#    image create pixmap pup_map -file wavefront.xpm
+#    $xpmimg itemconfigure pmap -image pup_map
     image create pixmap psf_map -file psf.xpm
     $xpmimg itemconfigure psfmap -image psf_map
 
@@ -1453,6 +1481,8 @@ proc showzerns {zrnfile} {
     set nzero 0
     set nfcked 0 
 
+    
+    
     for {set i 1} {$i <= $ZPOLY} {incr i} {
 	upvar #0 [lindex $zt $i] coeff
 	upvar #0 z$i button

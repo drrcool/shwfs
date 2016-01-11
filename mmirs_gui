@@ -35,10 +35,11 @@ class MainWindow
     @running = false
     @wfsock = nil
     @mmirsock = nil
-    wfsopen
     @filetime = 0
     @m1_gain.set_value(0.1)
     @m2_gain.set_value(0.2)   
+    #wfsopen #Removed this to make all the calls happen individually.
+    whost, wport = srv_lookup('mmirs-wfs')
   end
 
   def wfsopen
@@ -92,64 +93,125 @@ class MainWindow
     if @turbo.active?
       @m1_gain.set_sensitive(false)
       @m2_gain.set_sensitive(false)
-      msg_cmd(@wfsock, "m1_gain", "0.5")
-      msg_cmd(@wfsock, "m2_gain", "1.0")
+
+      @m1_gain_archive = @m1_gain.value
+      @m2_gain_archive = @m2_gain.value
+      @m1_gain.value = 0.5
+      @m2_gain.value = 1.0
+
+      wfsopen
+      msg_cmd(@wfsock, "m1_gain", @m1_gain.value)
+      msg_cmd(@wfsock, "m2_gain", @m2_gain.value)
+      wfsclose
+      
+      
     else
       @m1_gain.set_sensitive(true)
       @m2_gain.set_sensitive(true)
+
+      
+      @m1_gain.value = @m1_gain_archive
+      @m2_gain.value = @m2_gain_archive
+
+      wfsopen
       msg_cmd(@wfsock, "m1_gain", @m1_gain.value)
       msg_cmd(@wfsock, "m2_gain", @m2_gain.value)
+      wfsclose
+      
     end
   end
 
   # analyze image or list of images
   def centroid(list)
     report("Centroiding....")
-    msg_cmd(@wfsock, "centroid", list)
+    wfsopen
+    test = msg_cmd(@wfsock, "centroid", list)
+    wfsclose
     report("Centroiding Complete.")
+    return test
   end
 
   # set reference file for wfs
   def set_ref(file)
-    camera = `funhead #{file} | grep WFSNAME | awk '{print $3}'`
-    if camera =~ /mmirs1/
+    
+    camera = `funhead #{file}  | grep WFSNAME | awk '{print $4}'`
+    wfsopen
+    if camera =~ /mmirs1'/
       report("Using Camera #1.")
       msg_cmd(@wfsock, "setref", @foc1)
-    elsif camera =~ /mmirs2/
+    elsif camera =~ /mmirs2'/
       report("Using Camera #2.")
       msg_cmd(@wfsock, "setref", @foc2)
     else
       report("No camera specified.")
       sleep(5)
     end
+    wfsclose
     report("Reference set.")
   end
 
   # grab latest image
   def grab_image
-    mmirsopen
-    file = msg_get(@mmirsock, 'filename')
-    time = msg_get(@mmirsock, 'filetime').to_i
-    mmirsclose
+
+    #This is the old version of the code. Now, rather than use msg
+    #mmirs-wfs writes mmirs-pipe.log that records these pieces of info. 
+    #mmirsopen
+    #file = msg_get(@mmirsock, 'filename')
+    #time = msg_get(@mmirsock, 'filetime').to_i
+    #mmirsclose
+    ###########################################
+
+    pipefile = "/mmt/shwfs/datadir/mmirs-pipe.log"
+    if File.exist?(pipefile)
+      pipe = File.new(pipefile, "r")
+      #If it checks for pipefile, but that file is empty that can cause the GUI to
+      #crash, so check for that to prevent it.
+      filename = pipe.gets.to_s
+      if filename.strip.length != 0
+        file = filename.strip!
+        time = pipe.gets.to_s.to_i
+      else
+        file = "none"
+      end
+      
+      pipe.close
+    else
+      file = "none"
+    end
+   
     if file != "none" && time > @filetime
       report("Got Image.")
       set_ref(file)
-      centroid(file)
+      system("/usr/bin/xpaset -p WFS file #{file}")
+      system("/usr/bin/xpaset -p WFS zoom to 1.0")
+
+      centroid_status = centroid(file)
       @filetime = time
-      return true
+      
+      if centroid_status == true
+        return true
+      else
+        report "There was a problem Centroiding, skipping this file"
+        puts "There was a problem with centroiding file" + file
+        return false
+      end
     else
       report("No New Image.")
       return false
     end
   end    
 
+  #RJC -- These transmit to the hexapod even when we aren't
+  #doing continuous.  Rather tahn do the msg_cmd, we have moved
+  #the msg_cmd to the continuous loop
+  
   # change gain values for WFS corrections
   def on_M1_gain_value_changed
-    msg_cmd(@wfsock, "m1_gain", @m1_gain.value)
+  #  msg_cmd(@wfsock, "m1_gain", @m1_gain.value)
   end
 
   def on_M2_gain_value_changed
-    msg_cmd(@wfsock, "m2_gain", @m2_gain.value)
+ #   msg_cmd(@wfsock, "m2_gain", @m2_gain.value)
   end
 
   # grab latest image and centroid it
@@ -172,25 +234,49 @@ class MainWindow
       t = Thread.new {
         while @running do
           got_image = grab_image
+
           if got_image
+
+            #Set the gain
+            msg_cmd(@wfsock, "m1_gain", @m1_gain.value)
+            msg_cmd(@wfsock, "m2_gain", @m2_gain.value)
+                
             report("Applying Corrections.")
+
             if @focus.active?
+
+              wfsopen
               focus = msg_get(@wfsock, 'focus_um').to_f
-              if focus < 50.0 && !@turbo.active?
+              if focus < 50.0
                 msg_cmd(@wfsock, "corr_focus", nil)
               else
                 report("Focus error too large.")
               end
+              wfsclose
+              
             end
             if @coma.active?
+              wfsopen
               msg_cmd(@wfsock, "corr_coma", nil)
+              wfsclose
             end
             if @primary.active?
+              wfsopen
               msg_cmd(@wfsock, "corr_primary", nil)
+              wfsclose
             end
+
+            #Go back to default gains
+            wfsopen
+            msg_cmd(@wfsock, "m1_gain", 0.5)
+            msg_cmd(@wfsock, "m2_gain", 1.0)
+            wfsclose
+            
           end
+
           report("Waiting for next image....")
           sleep(2)
+         
         end
         report("Stopped Continuous WFS.")
       }
@@ -198,6 +284,8 @@ class MainWindow
       @running = false
       @getimage.set_sensitive(true)
       @continuous.child.set_text("START Continuous WFS")
+
+      
     end
   end
          

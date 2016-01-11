@@ -302,7 +302,9 @@ end
       system("echo \"offset_inc wfs z -30.0\" | nc -w 5 #{@hexhost} #{@hexport}")
     end
     if @inst == 'Maestro'
-      system("echo \" offset_inc wfs z -800.0\" | nc -w 5 #{@hexhost} #{@hexport}")
+      #This applied a 800 micron focus shift for MAESTRO that should no longer be needed
+      #as the instrument was raised.  Keeping code here for future use if needed - RJC Sept 2 2014
+      #system("echo \" offset_inc wfs z -800.0\" | nc -w 5 #{@hexhost} #{@hexport}")
     end
 
     system("echo \"apply_offsets\" | nc -w 5 #{@hexhost} #{@hexport}")

@@ -40,6 +40,7 @@ module MSG
 
   def msg_cmd(socket, command, value)
     return nil unless socket
+
     begin
       if value
 	socket.send("1 #{command} #{value}\n", 0)
@@ -47,10 +48,12 @@ module MSG
 	socket.send("1 #{command}\n", 0)
       end
       answer = socket.gets
+      
     rescue => why
       status = "Error: #{why}"
       return status
     end
+
     if (answer =~ /ack/)
       return true
     else 

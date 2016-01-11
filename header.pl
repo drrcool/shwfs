@@ -6,17 +6,31 @@ use IO::Socket::INET;
 use Astro::FITS::Header;
 use Astro::Time;
 use PDL;
-use SOAP::Lite;
+#use SOAP::Lite;
+use JSON;
 use Net::DNS;
 
 
 ($tcs_host, $tcs_port) = srv_lookup('telstat');
 
-$telstat = SOAP::Lite
-    -> proxy("http://$tcs_host:$tcs_port/")
-    -> uri('urn:Telstat');
+#$telstat = SOAP::Lite
+#    -> proxy("http://$tcs_host:$tcs_port/")
+#    -> uri('urn:Telstat');
+#
+#%data = %{$telstat->current_data("raw")->result};
+#
+# replace soap with new protocol
+# skip 20150901
+#
 
-%data = %{$telstat->current_data("raw")->result};
+my $sock = IO::Socket::INET->new ( PeerAddr => $tcs_host, PeerPort => $tcs_port, Timeout => 120.0 );
+my $tcs_response = "";
+if ($sock) {
+    $sock->send("current_data raw\n");
+    $sock->recv($tcs_response, 10240);
+    $sock->close();
+}
+%data = %{from_json($tcs_response)};
 
 if ($ARGV[0]) {
     system("cat $ARGV[0] | sed \'s/ENDTIME/FOOTIME/\' > /mmt/shwfs/datadir/tmp.fits");

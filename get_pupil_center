@@ -2,7 +2,6 @@
 
 import sys
 import getopt
-from numpy.numarray import *
 import scipy.ndimage as nd
 import pyfits
 import imagestats
