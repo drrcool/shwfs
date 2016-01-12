@@ -1177,7 +1177,8 @@ proc zernike {avfile} {
     set zrnfile "${avfile}.zrn"	
 
     #If we're using MMIRS, we need to correct the zernike file for off-axis aberations
-    set include_off_axis  0 # This is a flag that will ignore this code until I change this to 1
+    set include_off_axis 0
+    # This is a flag that will ignore this code until I change this to 1
     if {$fmode == "MMIRS" && $include_off_axis ==  1} {
 	puts "Updating Zernikes for Off-Axis Corrections
 
