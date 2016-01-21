@@ -29,14 +29,14 @@ class MainWindow
     @m1_gain = @glade.get_widget("M1_gain")
     @m2_gain = @glade.get_widget("M2_gain")
     @turbo = @glade.get_widget("Turbo")
-    
+
 
     @running = false
     @wfsock = nil
     @mmirsock = nil
     @filetime = 0
     @m1_gain.set_value(0.1)
-    @m2_gain.set_value(0.2)   
+    @m2_gain.set_value(0.2)
     #wfsopen #Removed this to make all the calls happen individually.
     whost, wport = srv_lookup('mmirs-wfs')
   end
@@ -88,13 +88,13 @@ class MainWindow
       msg_cmd(@wfsock, "m1_gain", @m1_gain.value)
       msg_cmd(@wfsock, "m2_gain", @m2_gain.value)
       wfsclose
-      
-      
+
+
     else
       @m1_gain.set_sensitive(true)
       @m2_gain.set_sensitive(true)
 
-      
+
       @m1_gain.value = @m1_gain_archive
       @m2_gain.value = @m2_gain_archive
 
@@ -102,7 +102,7 @@ class MainWindow
       msg_cmd(@wfsock, "m1_gain", @m1_gain.value)
       msg_cmd(@wfsock, "m2_gain", @m2_gain.value)
       wfsclose
-      
+
     end
   end
 
@@ -118,25 +118,91 @@ class MainWindow
 
 
   #configure and take exposure
-  
+  def Exposure()
+    exptime = @exptime.value.to_f
+    #Not making it possible to choose where this goes. Hardwiring it
+    file = "cont_wfs"
+
+    n = 1
+    ngood = 0
+    ntry = 0
+
+    until (ngood == nexp) || (ntry == 2) || @abort_on_exception
+      #Get the filename
+      num = 0
+      fullfilename = sprintf("%s/%s_%04d.fits", @dir, file num)
+      netfullfilename = sprintf("%s/%s_%04d.fits", @netdir, file, num)
+      filename = sprintf("%s_%04d.fits", file, num)
+
+      #Check to see if this file counter exists. If yes, increment
+      while test(?e, fullfilename)
+        num = num + 1
+        fullfilename = sprintf("%s/%s_%04d.fits", @dir, file, num)
+        netfullfilename = sprintf("%s/%s_%04d.fits", @netdir, file, num)
+        filename = sprintf("%s_%04d.fits", file, num)
+      end
+
+      #get the exposure timer going
+      if exptime > 1
+        count = Thread.new {
+          left = exptime.to_i
+          left.times {
+            report("Exposing \##{n} (#{filename})...#{left} sec left.")
+            sleep(1)
+            left = left - 1
+            }
+          report("Reading out \##{n} (#{filename})....")
+        }
+      else
+        report("Exposing \##{n} (#{filename})....")
+      end
+
+      #Perform the exposure
+      begin
+        timeout(exptime+30){
+          if (@mode == "F5")
+            system("#{@path}/getimage #{exptime} #{fullfilename}")
+          else
+            report("ONLY F5 Supported for now")
+          end
+          if test(?e, fullfilename)
+            system("#{@path}/header.pl #{fullfilename} #{exptime} #{@mode}")
+          else
+            report("Image acquision failed. Check WFS computer.")
+            @abort = true
+            return
+          end
+
+        }
+      rescue Timeout::Error
+        report("Exposure Timed Out.")
+        @abort = true
+        return
+      rescue => why
+        report("Expsure Failed: #{why}.")
+        @abort = true
+        return
+      end
+end
+
 
   # grab latest image
   def grab_image
 
     #This software just takes an image. This is *Very* different than
     # it was with the original MMIRS system and if there are problems it's likely here
-    
-    
-    
-    
-    
-    
-  end    
+
+
+
+
+
+
+  end
 
   #RJC -- These transmit to the hexapod even when we aren't
   #doing continuous.  Rather tahn do the msg_cmd, we have moved
   #the msg_cmd to the continuous loop
-  
+
   # change gain values for WFS corrections
   def on_M1_gain_value_changed
   #  msg_cmd(@wfsock, "m1_gain", @m1_gain.value)
@@ -172,7 +238,7 @@ class MainWindow
             #Set the gain
             msg_cmd(@wfsock, "m1_gain", @m1_gain.value)
             msg_cmd(@wfsock, "m2_gain", @m2_gain.value)
-                
+
             report("Applying Corrections.")
 
             if @focus.active?
@@ -185,7 +251,7 @@ class MainWindow
                 report("Focus error too large.")
               end
               wfsclose
-              
+
             end
             if @coma.active?
               wfsopen
@@ -203,12 +269,12 @@ class MainWindow
             msg_cmd(@wfsock, "m1_gain", 0.5)
             msg_cmd(@wfsock, "m2_gain", 1.0)
             wfsclose
-            
+
           end
 
           report("Waiting for next image....")
           sleep(2)
-         
+
         end
         report("Stopped Continuous WFS.")
       }
@@ -217,10 +283,10 @@ class MainWindow
       @getimage.set_sensitive(true)
       @continuous.child.set_text("START Continuous WFS")
 
-      
+
     end
   end
-         
+
 end
 
 # get the ball rolling!
