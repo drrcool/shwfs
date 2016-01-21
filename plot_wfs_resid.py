@@ -61,7 +61,8 @@ dist = []
 
 scale = 3.0
 
-if len(sysdata) > 0 :
+
+if len(sysdata) > 20 :
     for ii in range(0,len(sysdata)-1):
         x0.append(sysdata[ii]['x'])
         y0.append(sysdata[ii]['y'])
@@ -77,19 +78,24 @@ if len(sysdata) > 0 :
         
         dist_rms = np.sqrt( np.mean( np.square(dist)))*pix_scale
         
+else:
+    # I want it to plot something even if finds nothing.
+    dist_rms = -1.0
+    x0 = [0]
+    y0 = [0]
+    
+rcParams['figure.figsize'] = 4., 4.
+rcParams.update({'font.size':6})
+    
+    
+    
+for ii in range(0,len(x0)-1):
+    plt.plot( [x0[ii],x1[ii]],
+              [y0[ii],y1[ii]], 'b')
         
-    rcParams['figure.figsize'] = 4., 4.
-    rcParams.update({'font.size':6})
-    
-    
-    
-    for ii in range(0,len(x0)-1):
-        plt.plot( [x0[ii],x1[ii]],
-                  [y0[ii],y1[ii]], 'b')
-        
-    plt.text(-0.9*plotrange, 0.9*plotrange, "Mag="+str(scale), fontsize=10)
-    plt.text(-0.9*plotrange,-0.9*plotrange, 'RMS= %2.2f"' % dist_rms, fontsize=10)
-    plt.xlim(xmin=-1*plotrange, xmax=plotrange)
-    plt.ylim(ymin=-1*plotrange, ymax=plotrange)
-    plt.savefig(outxpm)
+plt.text(-0.9*plotrange, 0.9*plotrange, "Mag="+str(scale), fontsize=10)
+plt.text(-0.9*plotrange,-0.9*plotrange, 'RMS= %2.2f"' % dist_rms, fontsize=10)
+plt.xlim(xmin=-1*plotrange, xmax=plotrange)
+plt.ylim(ymin=-1*plotrange, ymax=plotrange)
+plt.savefig(outxpm)
 
