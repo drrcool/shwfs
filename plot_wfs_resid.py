@@ -62,7 +62,7 @@ dist = []
 scale = 3.0
 
 
-if len(sysdata) > 20 :
+if len(sysdata) > 1 :
     for ii in range(0,len(sysdata)-1):
         x0.append(sysdata[ii]['x'])
         y0.append(sysdata[ii]['y'])
