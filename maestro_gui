@@ -17,7 +17,7 @@ class MainWindow
     @path = "/mmt/shwfs"
     @dir = "/mmt/shwfs/datadir"
 
-    @glade = GladeXML.new("#{@path}/glade/mmirs_gui.glade") {|handler| method(handler)}
+    @glade = GladeXML.new("#{@path}/glade/maestro_gui.glade") {|handler| method(handler)}
     @getimage = @glade.get_widget("GetImage")
     @continuous = @glade.get_widget("Continuous")
     @mainwindow = @glade.get_widget("MainWindow")
@@ -117,46 +117,20 @@ class MainWindow
   end
 
 
+  #configure and take exposure
+  
+
   # grab latest image
   def grab_image
 
-    pipefile = "/mmt/shwfs/datadir/mmirs-pipe.log"
-    if File.exist?(pipefile)
-      pipe = File.new(pipefile, "r")
-      #If it checks for pipefile, but that file is empty that can cause the GUI to
-      #crash, so check for that to prevent it.
-      filename = pipe.gets.to_s
-      if filename.strip.length != 0
-        file = filename.strip!
-        time = pipe.gets.to_s.to_i
-      else
-        file = "none"
-      end
-      
-      pipe.close
-    else
-      file = "none"
-    end
-   
-    if file != "none" && time > @filetime
-      report("Got Image.")
-      system("/usr/bin/xpaset -p WFS file #{file}")
-      system("/usr/bin/xpaset -p WFS zoom to 1.0")
-
-      centroid_status = centroid(file)
-      @filetime = time
-      
-      if centroid_status == true
-        return true
-      else
-        report "There was a problem Centroiding, skipping this file"
-        puts "There was a problem with centroiding file" + file
-        return false
-      end
-    else
-      report("No New Image.")
-      return false
-    end
+    #This software just takes an image. This is *Very* different than
+    # it was with the original MMIRS system and if there are problems it's likely here
+    
+    
+    
+    
+    
+    
   end    
 
   #RJC -- These transmit to the hexapod even when we aren't
