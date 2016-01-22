@@ -18,9 +18,9 @@ class MainWindow
     @dir = "/mmt/shwfs/datadir"
 
     @glade = GladeXML.new("#{@path}/glade/maestro_gui.glade") {|handler| method(handler)}
-    @getimage = @glade.get_widget("GetImage")
     @continuous = @glade.get_widget("Continuous")
     @mainwindow = @glade.get_widget("MainWindow")
+    @exptime = @glade.get_widget("ExpTime")
     @status = @glade.get_widget("StatusBar")
     @menubar = @glade.get_widget("menubar1")
     @focus = @glade.get_widget("Focus")
@@ -31,11 +31,16 @@ class MainWindow
     @turbo = @glade.get_widget("Turbo")
 
 
+    #This only works for F5 currently, so hardwire this
+    @mode = "F5"
+
     @running = false
     @wfsock = nil
     @mmirsock = nil
     @filetime = 0
+    @exposing = false
     @m1_gain.set_value(0.1)
+    @exptime.set_value(10.0)
     @m2_gain.set_value(0.2)
     #wfsopen #Removed this to make all the calls happen individually.
     whost, wport = srv_lookup('mmirs-wfs')
@@ -118,86 +123,110 @@ class MainWindow
 
 
   #configure and take exposure
-  def Exposure()
+  def grab_image
+
+    #Check to see if a single exposure is already being taken
+    if @exposing
+      return false
+    end
+    
+    
     exptime = @exptime.value.to_f
     #Not making it possible to choose where this goes. Hardwiring it
     file = "cont_wfs"
-
+    nexp = 1
+    error = false
+    
     n = 1
     ngood = 0
     ntry = 0
 
-    until (ngood == nexp) || (ntry == 2) || @abort_on_exception
-      #Get the filename
-      num = 0
-      fullfilename = sprintf("%s/%s_%04d.fits", @dir, file num)
+    #Get the filename
+    num = 0
+    fullfilename = sprintf("%s/%s_%04d.fits", @dir, file, num)
+    netfullfilename = sprintf("%s/%s_%04d.fits", @netdir, file, num)
+    filename = sprintf("%s_%04d.fits", file, num)
+    
+    #Check to see if this file counter exists. If yes, increment
+    while test(?e, fullfilename)
+      num = num + 1
+      fullfilename = sprintf("%s/%s_%04d.fits", @dir, file, num)
       netfullfilename = sprintf("%s/%s_%04d.fits", @netdir, file, num)
       filename = sprintf("%s_%04d.fits", file, num)
-
-      #Check to see if this file counter exists. If yes, increment
-      while test(?e, fullfilename)
-        num = num + 1
-        fullfilename = sprintf("%s/%s_%04d.fits", @dir, file, num)
-        netfullfilename = sprintf("%s/%s_%04d.fits", @netdir, file, num)
-        filename = sprintf("%s_%04d.fits", file, num)
-      end
-
-      #get the exposure timer going
-      if exptime > 1
-        count = Thread.new {
-          left = exptime.to_i
-          left.times {
-            report("Exposing \##{n} (#{filename})...#{left} sec left.")
-            sleep(1)
-            left = left - 1
-            }
-          report("Reading out \##{n} (#{filename})....")
+    end
+    
+    #Fire a thread to countdown the exposures on the statusbar
+    if exptime >= 1
+      count = Thread.new {
+        left = exptime.to_i
+        left.times {
+          report("Exposing \##{n} (#{filename})..#{left} sec left.")
+          sleep(1)
+          left = left - 1
         }
-      else
-        report("Exposing \##{n} (#{filename})....")
+        report("Reading out \##{n} (#{filename})....")
+      }
+    else
+      report("Exposing \##{n} (#{filename})....")
+    end
+    
+    #Give the script 30s beyond the exposure time
+    begin
+      time = exptime + 30
+      get_stuff = Thread.new{
+        system("#{@path}/getimage #{exptime} #{fullfilename}")
+      }
+      
+      timeout = 0
+      while get_stuff.alive?
+        if (timeout >= time && get_stuff.alive?)
+          get_stuff.kill
+          raise "F5 WFS Communication script hung."
+        end
+        sleep(1.0)
+        timeout = timeout + 1
       end
+    end
 
-      #Perform the exposure
-      begin
-        timeout(exptime+30){
-          if (@mode == "F5")
-            system("#{@path}/getimage #{exptime} #{fullfilename}")
+    
+    
+    #Counter thread better be dead by now
+    if (count.alive?)
+      count.kill
+      report("Error Exposing #{filename}: Script died prematurely")
+      error = true
+      return
+    end
+    
+    # should only get here if everything is working well
+    begin
+      timeout(10){
+        if test(?s, fullfilename)
+          system("#{@path}/header.pl #{fullfilename} #{exptime} F5")
+          system("/usr/bin/xpaset -p WFS file #{fullfilename}")
+          system("/usr/bin/xpaset -p WFS zoom to 1.0")
+
+          centroid_status = centroid(fullfilename)
+          @filetime = time
+
+          if centroid_status == true
+            return true
           else
-            report("ONLY F5 Supported for now")
-          end
-          if test(?e, fullfilename)
-            system("#{@path}/header.pl #{fullfilename} #{exptime} #{@mode}")
-          else
-            report("Image acquision failed. Check WFS computer.")
-            @abort = true
-            return
-          end
-
-        }
-      rescue Timeout::Error
-        report("Exposure Timed Out.")
-        @abort = true
-        return
-      rescue => why
-        report("Expsure Failed: #{why}.")
-        @abort = true
-        return
-      end
-end
-
-
-  # grab latest image
-  def grab_image
-
-    #This software just takes an image. This is *Very* different than
-    # it was with the original MMIRS system and if there are problems it's likely here
-
-
-
-
-
-
+            report "There was a problem Centroiding, skipping file"
+            puts "there was a problem with centroiding file %s" % fullfilename
+            return false
+          end                    
+        else
+          raise "Image Missing"
+        end
+      }
+    end
+    
   end
+
+  
+          
+
 
   #RJC -- These transmit to the hexapod even when we aren't
   #doing continuous.  Rather tahn do the msg_cmd, we have moved
@@ -212,81 +241,78 @@ end
  #   msg_cmd(@wfsock, "m2_gain", @m2_gain.value)
   end
 
-  # grab latest image and centroid it
-  def on_GetImage_clicked
-    @continuous.set_sensitive(false)
-    @getimage.set_sensitive(false)
-    Thread.new {
-      grab_image
-      @continuous.set_sensitive(true)
-      @getimage.set_sensitive(true)
-    }
-  end
-
   # continuously grab latest frame, analyze, and send requested corrections
   def on_Continuous_toggled
     if (@continuous.active?)
-      @getimage.set_sensitive(false)
       @running = true
       @continuous.child.set_text("STOP Continuous WFS")
-      t = Thread.new {
-        while @running do
-          got_image = grab_image
-
-          if got_image
-
-            #Set the gain
-            msg_cmd(@wfsock, "m1_gain", @m1_gain.value)
-            msg_cmd(@wfsock, "m2_gain", @m2_gain.value)
-
-            report("Applying Corrections.")
-
-            if @focus.active?
-
-              wfsopen
-              focus = msg_get(@wfsock, 'focus_um').to_f
-              if focus < 50.0
-                msg_cmd(@wfsock, "corr_focus", nil)
-              else
-                report("Focus error too large.")
-              end
-              wfsclose
-
-            end
-            if @coma.active?
-              wfsopen
-              msg_cmd(@wfsock, "corr_coma", nil)
-              wfsclose
-            end
-            if @primary.active?
-              wfsopen
-              msg_cmd(@wfsock, "corr_primary", nil)
-              wfsclose
-            end
-
-            #Go back to default gains
-            wfsopen
-            msg_cmd(@wfsock, "m1_gain", 0.5)
-            msg_cmd(@wfsock, "m2_gain", 1.0)
-            wfsclose
-
-          end
-
-          report("Waiting for next image....")
-          sleep(2)
-
-        end
-        report("Stopped Continuous WFS.")
-      }
     else
       @running = false
-      @getimage.set_sensitive(true)
-      @continuous.child.set_text("START Continuous WFS")
-
-
+      @continuous.child.set_text("START Continous WFS")
     end
-  end
 
+    t = Thread.new{
+      
+      while @running
+        got_image = grab_image
+
+        if got_image
+
+          #Set the gains
+          msg_cmd(@wfsock, "m1_gain", @m1_gain.value)
+          msg_cmd(@wfsock, "m2_gain", @m2_gain.value)
+
+          report ("Applying Corrections as Checked.")
+
+          #If the focus box is checked, apply the focus correction
+          if @focus.active?
+            wfsopen
+            focus = msg_get(@wfsock, 'focus_um').to_f
+            if focus < 50.0
+              msg_cmd(@wfssock, "corr_focus", nil)
+            else
+              report("Focus error too large.")
+              puts("Skilling focus error")
+            end
+            wfsclose
+          end
+
+          #Is the coma checked?
+          if @coma.active?
+            wfsopen
+            msg_cmd(@wfsock, "corr_coma", nil)
+            wfsclose
+          end
+
+          #Is the primary checked?
+          if @primary.active?
+            wfsopen
+            msg_cmd(@wfsock, "corr_primary", nil)
+            wfsclose
+          end
+
+          #Go back to defaul gains
+          wfsopen
+          msg_cmd(@wfsock, "m1_gain", 0.5)
+          msg_cmd(@wfsock, "m2_gain", 1.0)
+          wfsclose
+          
+        end
+
+        report("Waiting for next image...")
+        
+                  
+
+      end
+    
+      report("Stopped Continous WFS")
+      
+    }
+    
+
+      
+    
+  end
 end
 
 # get the ball rolling!
